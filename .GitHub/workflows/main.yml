@@ -1,4 +1,4 @@
- # name: Update Proxy
+  name: Update Proxy
 
 on:
   schedule:
