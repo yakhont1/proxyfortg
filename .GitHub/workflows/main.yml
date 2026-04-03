@@ -1,9 +1,9 @@
-name: Update Proxy
+ # name: Update Proxy
 
 on:
   schedule:
-    - cron: '0 */3 * * *' # Запуск каждые 3 часа
-  workflow_dispatch: # Позволяет запустить вручную
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
