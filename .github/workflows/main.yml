@@ -17,8 +17,32 @@ jobs:
           python-version: '3.x'
       - name: Install dependencies
         run: pip install requests
-      - name: Run script
+      - name: Run logic
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python proxy_bot.py
+        run: |
+          import requests
+          import os
+
+          def get_data(url):
+              try:
+                  r = requests.get(url, timeout=15)
+                  return [l for l in r.text.splitlines() if len(l) > 10][:5]
+              except: return []
+
+          token = os.environ['TELEGRAM_TOKEN']
+          chat_id = os.environ['CHAT_ID']
+          
+          # Сбор данных
+          http = get_data("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")
+          v2ray = get_data("https://raw.githubusercontent.com/freev2rayspeed/v2ray/main/v2ray.txt")
+
+          text = "🔥 **NEW MEGA LIST** 🔥\n\n"
+          text += "🌐 **HTTP/S:**\n" + "\n".join([f"`{p}`" for p in http]) + "\n\n"
+          text += "🔐 **VLESS/V2RAY:**\n" + "\n".join([f"🔗 [Link {i+1}]({v})" for i, v in enumerate(v2ray)]) + "\n\n"
+          text += "🛡 **MTPROTO:**\n🔗 [Connect](https://t.me/proxy?server=exp.proxy.com&port=443&secret=7gAAAAAAAAAAAAAAAAAAAABnb29nbGUuY29t)"
+
+          requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
+                        data={"chat_id": chat_id, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": True})
+        shell: python
