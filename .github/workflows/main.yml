@@ -34,48 +34,53 @@ jobs:
                           matches = re.findall(pattern, content)
                           combined.extend(matches)
                   except: continue
-              return list(dict.fromkeys(combined))
+              # Убираем дубликаты и пустые строки
+              return list(dict.fromkeys([m.strip() for m in combined if m]))
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. HTTP - берем ровно 5 штук
-          http_raw = get_proxies(["https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"], r"\d+\.\d+\.\d+\.\d+:\d+")
-          http_list = http_raw[:5]
+          # 1. HTTP - Берем ровно 5 штук
+          http_urls = ["https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt", 
+                       "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt"]
+          http_list = get_proxies(http_urls, r"\d+\.\d+\.\d+\.\d+:\d+")[:5]
 
-          # 2. VLESS/VMESS - ищем в живых источниках (5 штук)
-          v_sources = [
-              "https://raw.githubusercontent.com/Alvin9999/new-pac/master/v2ray.txt",
-              "https://raw.githubusercontent.com/vfarid/v2ray-worker/master/sub/sub.txt"
-          ]
-          v_list = get_proxies(v_sources, r"(vless://[^\s]+|vmess://[^\s]+|ss://[^\s]+)")[:5]
+          # 2. VLESS/VMESS - 5 штук
+          v_urls = ["https://raw.githubusercontent.com/Alvin9999/new-pac/master/v2ray.txt",
+                    "https://raw.githubusercontent.com/freev2rayspeed/v2ray/main/v2ray.txt"]
+          v_list = get_proxies(v_urls, r"(vless://[^\s]+|vmess://[^\s]+|ss://[^\s]+|trojan://[^\s]+)")[:5]
 
-          # 3. MTPROTO - (5 штук)
-          mt_sources = [
-              "https://raw.githubusercontent.com/soroushmirzaei/telegram-proxies/main/proxies",
-              "https://raw.githubusercontent.com/mizane-mize/MTProto/main/MTProto.txt"
-          ]
-          mt_raw = get_proxies(mt_sources, r"(tg://proxy\?server=[^\s]+|https://t\.me/proxy\?server=[^\s]+)")
+          # 3. MTPROTO - 5 штук
+          mt_urls = ["https://raw.githubusercontent.com/soroushmirzaei/telegram-proxies/main/proxies",
+                     "https://raw.githubusercontent.com/mizane-mize/MTProto/main/MTProto.txt"]
+          mt_raw = get_proxies(mt_urls, r"(tg://proxy\?server=[^\s]+|https://t\.me/proxy\?server=[^\s]+)")
           mt_list = mt_raw[:5]
 
           msg = "✨ **PREMIUM PROXY PACK** ✨\n\n"
           
-          msg += "🌐 **HTTP/S (Tap to copy):**\n"
-          msg += "\n".join([f"`{p}`" for p in http_list]) if http_list else "🔄 Updating..."
+          msg += "🌐 **HTTP/S (Top 5):**\n"
+          msg += "\n".join([f"`{p}`" for p in http_list]) if http_list else "🔄 Обновление..."
           
-          msg += "\n\n🔐 **VLESS / VMESS (Top 5):**\n"
+          msg += "\n\n🔐 **VLESS / VMESS / TROJAN:**\n"
           if v_list:
               for i, l in enumerate(v_list): msg += f"🚀 Node {i+1}:\n`{l}`\n\n"
-          else: msg += "❌ Nodes temporarily unavailable\n\n"
+          else:
+              msg += "❌ Конфиги не найдены\n\n"
 
           msg += "🛡 **MTPROTO (Telegram 5):**\n"
           if mt_list:
               for i, l in enumerate(mt_list):
+                  # Принудительно делаем ссылку в формате tg://
                   clean = l.replace("https://t.me/proxy?", "tg://proxy?")
-                  msg += f"🔹 [Active Proxy {i+1}]({clean})\n"
+                  msg += f"🔹 [Рабочий прокси {i+1}]({clean})\n"
           else:
-              msg += "🔹 [Backup MTProto](tg://proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)\n"
+              msg += "🔹 [Запасной MTProto](tg://proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)\n"
 
-          # Отправка
-          data = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
-          urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=data)
+          # Отправка через API Telegram
+          params = urllib.parse.urlencode({
+              "chat_id": c, 
+              "text": msg, 
+              "parse_mode": "Markdown", 
+              "disable_web_page_preview": "True"
+          }).encode()
+          urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=params)
         shell: python
