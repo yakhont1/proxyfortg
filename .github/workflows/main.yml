@@ -1,8 +1,8 @@
-name: Update Proxy
+name: Global Proxy Update
 
 on:
   schedule:
-    - cron: '0 */1 * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -24,75 +24,54 @@ jobs:
           import re
           import os
           import random
-          import base64
 
           def get_web(url):
               try:
-                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
+                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       return r.read().decode('utf-8', errors='ignore')
               except: return ""
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. МГНОВЕННЫЙ ПОИСК VLESS/TROJAN (Прямые Raw-каналы)
-          # Берем источники, которые не требуют кликов и JS
-          raw_urls = [
-              "https://raw.githubusercontent.com/freev2rayng/v2ray-subscription/main/v2ray.txt",
-              "https://sub.shz.al/v2ray",
-              "https://vless.at.ua/index/0-2",
-              "https://t.me/s/v2rayng_v"
-          ]
-          
-          combined_data = ""
-          for url in raw_urls:
-              res = get_web(url)
-              # Если данные закодированы (Base64), расшифровываем их
-              try:
-                  combined_data += base64.b64decode(res).decode('utf-8')
-              except:
-                  combined_data += res
-
-          # Ищем ключи vless и trojan
-          found = re.findall(r"((?:vless|trojan)://[^\s<\"'#]+)", combined_data)
-          
-          final_nodes = []
-          for link in found:
-              clean = re.split(r'[<>"\'\s]', link)[0]
-              # Оставляем только длинные, полные ключи
-              if len(clean) > 110:
-                  final_nodes.append(clean)
-
-          final_nodes = list(dict.fromkeys(final_nodes))
-          random.shuffle(final_nodes)
-          v_res = final_nodes[:2] # Лимит: 2 ключа для v2rayNG
-
-          # 2. MTPROTO (Исправленные ссылки с секретом)
+          # 1. Fetching MTProto (Telegram Direct)
           m_data = get_web("https://t.me/s/ProxyMTProto") + get_web("https://t.me/s/TelMTProto")
           mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
           random.shuffle(mt_links)
-          mt_res = mt_links[:5]
+          mt_final = mt_links[:5]
 
-          # 3. HTTP/S
-          h_res = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http"))))[:5]
+          # 2. Fetching HTTP/S Proxies
+          h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http")
+          h_list = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))
+          random.shuffle(h_list)
+          h_final = h_list[:8]
 
-          msg = "⚔️ **V2RAY SURVIVAL MODE** ⚔️\n\n"
+          # Building the Professional English Post
+          msg = "🌐 **GLOBAL PROXY NETWORK UPDATE** 🌐\n\n"
           
-          msg += "🌐 **HTTP/S:**\n"
-          msg += "\n".join([f"`{p}`" for p in h_res]) if h_res else "❌ Offline"
-
-          msg += "\n\n🔐 **VLESS / TROJAN (Direct Raw):**\n"
-          if v_res:
-              for i, node in enumerate(v_res):
-                  msg += f"🔥 Node {i+1}:\n`{node}`\n\n"
+          msg += "🔒 **MTPROTO (Telegram Direct)**\n"
+          msg += "*High-speed encryption for stable connection*\n"
+          if mt_final:
+              for i, link in enumerate(mt_final):
+                  msg += f"🔹 [Secure Access {i+1}]({link})\n"
           else:
-              msg += "⚠️ Все узлы в спящем режиме. Используйте MTProto.\n\n"
+              msg += "⚠️ *Scanning for active nodes...*\n"
 
-          msg += "🛡 **MTPROTO (Work Links):**\n"
-          for i, link in enumerate(mt_res):
-              # Теперь это снова рабочие кнопки подключения
-              msg += f"🔹 [Connect Proxy {i+1}]({link})\n"
+          msg += "\n📡 **HTTP / HTTPS (Browsing)**\n"
+          msg += "*Global list for apps and web scraping*\n"
+          if h_final:
+              msg += "```\n" + "\n".join(h_final) + "\n```"
+          else:
+              msg += "❌ *Service temporarily offline*"
 
-          params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
+          msg += "\n\n✨ **Status:** `Operational`\n"
+          msg += "🕒 **Next Refresh:** In 2 hours"
+
+          params = urllib.parse.urlencode({
+              "chat_id": c, 
+              "text": msg, 
+              "parse_mode": "Markdown", 
+              "disable_web_page_preview": "True"
+          }).encode()
           urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=params)
         shell: python
