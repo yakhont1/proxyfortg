@@ -27,67 +27,70 @@ jobs:
 
           def get_web(url):
               try:
-                  req = urllib.request.Request(url, headers={
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
-                  })
+                  # Имитируем реальный браузер максимально подробно
+                  headers = {
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                      'Accept-Language': 'ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3',
+                      'DNT': '1'
+                  }
+                  req = urllib.request.Request(url, headers=headers)
                   with urllib.request.urlopen(req, timeout=20) as r:
                       return r.read().decode('utf-8', errors='ignore')
               except: return ""
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. HTTP/S
-          h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http")
-          h_final = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))[:5]
-
-          # 2. VLESS & TROJAN
-          # Собираем из агрегаторов, которые работают без JS
-          v_sources = [
+          # 1. Сбор ключей (VLESS, Trojan)
+          # Используем прямые подписки, которые обновляются чаще всего
+          sources = [
+              "https://raw.githubusercontent.com/freev2rayng/v2ray-subscription/main/v2ray.txt", # Прямой список ключей
               "https://sub.shz.al/v2ray",
               "https://t.me/s/v2rayng_v",
-              "https://t.me/s/v2ray_custom",
-              "https://t.me/s/V2ray_Alpha"
+              "https://vless.at.ua/index/0-2"
           ]
           
-          v_combined = "".join([get_web(s) for s in v_sources])
-          p_links = re.findall(r"((?:vless|trojan)://[^\s<\"'#]+)", v_combined)
+          all_data = ""
+          for s in sources:
+              all_data += get_web(s)
           
-          p_clean = []
-          for link in p_links:
-              clean = re.split(r'[<>"\'\s]', link)[0]
-              if len(clean) > 80:
-                  p_clean.append(clean)
-
-          p_final = list(dict.fromkeys(p_clean))
-          random.shuffle(p_final)
-          p_final = p_final[:2] 
-
-          # 3. MTPROTO - Исправленный захват полной ссылки
-          m_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
-          m_all = "".join([get_web(u) for u in m_sources])
-          # Ищем полную ссылку со всеми параметрами после ?
-          mt_list = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_all)))
-          random.shuffle(mt_list)
-          mt_final = mt_list[:5]
-
-          msg = "🚀 **V2RAYNG FINAL ATTEMPT** 🚀\n\n"
+          # Регулярка для поиска полных ссылок (включая все параметры)
+          keys = re.findall(r"((?:vless|trojan)://[^\s<\"'#]+)", all_data)
           
-          msg += "🌐 **HTTP/S (Browsing):**\n"
-          msg += "\n".join([f"`{p}`" for p in h_final]) if h_final else "❌ Offline"
+          # Очистка и фильтрация
+          final_pool = []
+          for k in keys:
+              clean = re.split(r'[<>"\'\s]', k)[0]
+              if len(clean) > 90 and clean not in final_pool:
+                  final_pool.append(clean)
 
-          msg += "\n\n🔐 **VLESS / TROJAN (Top 2):**\n"
-          if p_final:
-              for i, node in enumerate(p_final):
+          random.shuffle(final_pool)
+          v_final = final_pool[:2] # Оставляем 2 лучших
+
+          # 2. MTPROTO - Исправленный захват полной ссылки
+          m_all = get_web("https://t.me/s/ProxyMTProto")
+          mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_all)))
+          random.shuffle(mt_links)
+          mt_final = mt_links[:5]
+
+          msg = "✨ **DYNAMIC PROXY REFRESH** ✨\n\n"
+          
+          msg += "🌐 **HTTP/S:**\n"
+          h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http")
+          h_list = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))[:5]
+          msg += "\n".join([f"`{p}`" for p in h_list]) if h_list else "❌ Offline"
+
+          msg += "\n\n🔐 **VLESS / TROJAN (Active):**\n"
+          if v_final:
+              for i, node in enumerate(v_final):
                   msg += f"🔥 Node {i+1}:\n`{node}`\n\n"
           else:
-              msg += "⚠️ Нет доступных узлов. Попробуйте обновить позже.\n\n"
+              msg += "⚠️ Ключи в ротации. Попробуйте снова через 10 минут.\n\n"
 
           msg += "🛡 **MTPROTO (Telegram Links):**\n"
           if mt_final:
               for i, link in enumerate(mt_final):
-                  msg += f"🔹 [Connect Proxy {i+1}]({link})\n"
-          else:
-              msg += "🔹 [Emergency Link](tg://proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)"
+                  msg += f"🔹 [Active Proxy {i+1}]({link})\n"
 
           params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
           urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=params)
