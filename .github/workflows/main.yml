@@ -24,48 +24,36 @@ jobs:
         run: |
           import requests, os, re
 
-          def fetch(url):
-              try:
-                  r = requests.get(url, timeout=20)
-                  return r.text if r.status_code == 200 else ""
-              except: return ""
-
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
-          
-          # 1. Собираем всё сырье из мощных агрегаторов
-          raw_data = fetch("https://raw.githubusercontent.com/freev2rayspeed/v2ray/main/v2ray.txt")
-          raw_data += fetch("https://raw.githubusercontent.com/yebekhe/TelegramVipProxy/main/configs")
-          raw_data += fetch("https://raw.githubusercontent.com/officialputin/prospector/main/res/proxies.txt")
 
-          # 2. Вытаскиваем VLESS/VMESS/SS (все что начинается на vless:// и т.д.)
-          v_configs = re.findall(r"(vless://[^\s]+|vmess://[^\s]+|ss://[^\s]+|trojan://[^\s]+)", raw_data)
-          v_configs = list(dict.fromkeys(v_configs))[:5] # Берем 5 уникальных
+          # 1. Берем VLESS из самого стабильного на сегодня источника (обновляется ежеминутно)
+          v_data = requests.get("https://raw.githubusercontent.com/yebekhe/TelegramVipProxy/main/configs", timeout=20).text
+          v_configs = re.findall(r"(vless://[^\s]+|vmess://[^\s]+|ss://[^\s]+)", v_data)[:5]
 
-          # 3. Вытаскиваем MTPROTO (ищем именно ссылки tg://proxy)
-          mt_links = re.findall(r"(tg://proxy\?server=[^\s]+|https://t\.me/proxy\?server=[^\s]+)", raw_data)
-          mt_links = list(dict.fromkeys(mt_links))[:5]
+          # 2. Берем MTPROTO из специализированного агрегатора
+          m_data = requests.get("https://raw.githubusercontent.com/yebekhe/TelegramVipProxy/main/proxies", timeout=20).text
+          mt_links = re.findall(r"(tg://proxy\?server=[^\s]+)", m_data)[:5]
 
-          # 4. HTTP прокси (просто IP:PORT)
-          http_raw = fetch("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")
-          http_proxies = http_raw.splitlines()[:10]
+          # 3. HTTP прокси
+          h_data = requests.get("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt", timeout=20).text
+          http_proxies = h_data.splitlines()[:10]
 
-          msg = "🚀 **MEGA PROXY UPDATE** 🚀\n\n"
+          msg = "✨ **ULTRA PROXY PACK** ✨\n\n"
           
           msg += "🌐 **HTTP/S (Tap to copy):**\n"
           msg += "\n".join([f"`{p}`" for p in http_proxies]) + "\n\n"
           
-          msg += "🔐 **VLESS / TROJAN / SS:**\n"
+          msg += "🔐 **VLESS / VMESS / SS:**\n"
           if v_configs:
               for i, conf in enumerate(v_configs):
-                  msg += f"📎 Node {i+1}:\n`{conf}`\n\n"
-          else: msg += "❌ Конфиги V2Ray не найдены\n\n"
+                  msg += f"🔗 Node {i+1}:\n`{conf}`\n\n"
+          else:
+              msg += "⚠️ Конфиги временно недоступны\n\n"
 
           msg += "🛡 **MTPROTO (Telegram):**\n"
           if mt_links:
               for i, link in enumerate(mt_links):
-                  # Очищаем ссылку, если она в формате https://t.me/
-                  clean_link = link.replace("https://t.me/proxy?", "tg://proxy?")
-                  msg += f"🔹 [Рабочий прокси {i+1}]({clean_link})\n"
+                  msg += f"🔹 [Рабочий прокси {i+1}]({link})\n"
           else:
               msg += "🔹 [Запасной MTProto](tg://proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)\n"
 
