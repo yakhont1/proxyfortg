@@ -18,31 +18,55 @@ jobs:
       - name: Install dependencies
         run: pip install requests
       - name: Run logic
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
           import requests
           import os
+          import re
 
-          def get_data(url):
-              try:
-                  r = requests.get(url, timeout=15)
-                  return [l for l in r.text.splitlines() if len(l) > 10][:5]
-              except: return []
+          def get_data(urls, limit=5):
+              combined = []
+              for url in urls:
+                  try:
+                      r = requests.get(url, timeout=15)
+                      if r.status_code == 200:
+                          # Ищем всё, что похоже на прокси или конфиги
+                          lines = [l.strip() for l in r.text.splitlines() if len(l) > 10]
+                          combined.extend(lines)
+                  except: pass
+              return list(set(combined))[:limit]
 
           token = os.environ['TELEGRAM_TOKEN']
           chat_id = os.environ['CHAT_ID']
           
-          # Сбор данных
-          http = get_data("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")
-          v2ray = get_data("https://raw.githubusercontent.com/freev2rayspeed/v2ray/main/v2ray.txt")
+          # Источники
+          http_src = ["https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"]
+          v2ray_src = [
+              "https://raw.githubusercontent.com/freev2rayspeed/v2ray/main/v2ray.txt",
+              "https://raw.githubusercontent.com/V2RAY-CONFIG/V2RAY-CONFIG/main/All_Configs_Sub.txt"
+          ]
+          mtproto_src = ["https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"] # Тут обычно SOCKS5, которые подходят
 
+          http = get_data(http_src, 5)
+          v2ray = get_data(v2ray_src, 5)
+          
           text = "🔥 **NEW MEGA LIST** 🔥\n\n"
-          text += "🌐 **HTTP/S:**\n" + "\n".join([f"`{p}`" for p in http]) + "\n\n"
-          text += "🔐 **VLESS/V2RAY:**\n" + "\n".join([f"🔗 [Link {i+1}]({v})" for i, v in enumerate(v2ray)]) + "\n\n"
-          text += "🛡 **MTPROTO:**\n🔗 [Connect](https://t.me/proxy?server=exp.proxy.com&port=443&secret=7gAAAAAAAAAAAAAAAAAAAABnb29nbGUuY29t)"
+          
+          text += "🌐 **HTTP/S (Copy to use):**\n"
+          for p in http: text += f"`{p}`\n"
+          
+          text += "\n🔐 **VLESS / TROJAN / SS:**\n"
+          if v2ray:
+              for i, v in enumerate(v2ray):
+                  # Используем моноширинный шрифт, чтобы копировалось одним тапом
+                  text += f"🔗 **Config {i+1}:**\n`{v[:60]}...`\n[Скопировать полную ссылку]({v})\n\n"
+          else:
+              text += "Обновляем конфиги...\n"
 
+          text += "🛡 **MTPROTO (Telegram):**\n"
+          # Добавляем реально рабочую ссылку для примера, пока ищем живой парсер
+          text += "🔗 [Подключить быстрый Proxy](https://t.me/proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)\n"
+          
+          # Отправка
           requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
                         data={"chat_id": chat_id, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": True})
         shell: python
