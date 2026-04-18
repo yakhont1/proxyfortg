@@ -34,7 +34,7 @@ jobs:
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. Fetching MTProto (Telegram Direct)
+          # 1. Fetching MTProto Links
           m_data = get_web("https://t.me/s/ProxyMTProto") + get_web("https://t.me/s/TelMTProto")
           mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
           random.shuffle(mt_links)
@@ -46,7 +46,7 @@ jobs:
           random.shuffle(h_list)
           h_final = h_list[:8]
 
-          # Building the Professional English Post
+          # Building the Professional Post
           msg = "🌐 **GLOBAL PROXY NETWORK UPDATE** 🌐\n\n"
           
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
@@ -58,13 +58,15 @@ jobs:
               msg += "⚠️ *Scanning for active nodes...*\n"
 
           msg += "\n📡 **HTTP / HTTPS (Browsing)**\n"
-          msg += "*Global list for apps and web scraping*\n"
+          msg += "*Tap any proxy to copy it individually*\n"
           if h_final:
-              msg += "```\n" + "\n".join(h_final) + "\n```"
+              # Wrapping each proxy in backticks for individual copying
+              for p in h_final:
+                  msg += f"`{p}`\n"
           else:
               msg += "❌ *Service temporarily offline*"
 
-          msg += "\n\n✨ **Status:** `Operational`\n"
+          msg += "\n✨ **Status:** `Operational`\n"
           msg += "🕒 **Next Refresh:** In 2 hours"
 
           params = urllib.parse.urlencode({
