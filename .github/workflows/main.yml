@@ -28,20 +28,23 @@ jobs:
                   r = requests.get(u, timeout=15)
                   if r.status_code == 200:
                       return [l.strip() for l in r.text.splitlines() if len(l) > 10][:5]
+                  return []
               except: return []
           
-          t = os.getenv('TELEGRAM_TOKEN')
-          c = os.getenv('CHAT_ID')
-          
-          if not t or not c:
-              print("Error: Secrets not found!")
-              exit(1)
+          t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
+          if not t or not c: exit(1)
 
           h = get_d("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt")
           v = get_d("https://raw.githubusercontent.com/freev2rayspeed/v2ray/main/v2ray.txt")
           
-          msg = "🔥 **NEW MEGA LIST** 🔥\n\n🌐 **HTTP/S (Tap to copy):**\n" + "\n".join([f"`{p}`" for p in h])
-          msg += "\n\n🔐 **VLESS/V2RAY (Tap to copy):**\n" + "\n".join([f"🔗 Link {i+1}:\n`{l}`" for i, l in enumerate(v)])
+          msg = "🔥 **NEW MEGA LIST** 🔥\n\n🌐 **HTTP/S (Tap to copy):**\n"
+          msg += "\n".join([f"`{p}`" for p in h]) if h else "Updating..."
+          
+          msg += "\n\n🔐 **VLESS/V2RAY (Tap to copy):**\n"
+          if v:
+              for i, l in enumerate(v): msg += f"🔗 Link {i+1}:\n`{l}`\n"
+          else: msg += "Searching for links..."
+          
           msg += "\n\n🛡 **MTPROTO:**\n🔗 [Connect Proxy](https://t.me/proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)"
           
           requests.post(f"https://api.telegram.org/bot{t}/sendMessage", 
