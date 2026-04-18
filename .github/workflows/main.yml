@@ -27,71 +27,68 @@ jobs:
 
           def get_web(url):
               try:
-                  # Имитируем реальный браузер максимально подробно
-                  headers = {
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                      'Accept-Language': 'ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3',
-                      'DNT': '1'
-                  }
-                  req = urllib.request.Request(url, headers=headers)
-                  with urllib.request.urlopen(req, timeout=20) as r:
+                  # Имитируем мобильный Chrome, чтобы получить облегченную версию страниц
+                  req = urllib.request.Request(url, headers={
+                      'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+                  })
+                  with urllib.request.urlopen(req, timeout=15) as r:
                       return r.read().decode('utf-8', errors='ignore')
               except: return ""
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. Сбор ключей (VLESS, Trojan)
-          # Используем прямые подписки, которые обновляются чаще всего
-          sources = [
-              "https://raw.githubusercontent.com/freev2rayng/v2ray-subscription/main/v2ray.txt", # Прямой список ключей
+          # 1. MTPROTO (Telegram) - Работает стабильно
+          m_urls = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto", "https://t.me/s/MTProto_Proxy"]
+          m_all = "".join([get_web(u) for u in m_urls])
+          mt_final = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_all)))
+          random.shuffle(mt_final)
+          mt_final = mt_final[:5]
+
+          # 2. VLESS / TROJAN - Собираем только из текстовых потоков (Raw Subscriptions)
+          v_sources = [
               "https://sub.shz.al/v2ray",
+              "https://t.me/s/v2ray_outline_vless",
               "https://t.me/s/v2rayng_v",
-              "https://vless.at.ua/index/0-2"
+              "https://t.me/s/v2ray_custom"
           ]
           
-          all_data = ""
-          for s in sources:
-              all_data += get_web(s)
+          v_data = "".join([get_web(s) for s in v_sources])
+          # Ищем ключи, которые начинаются с протокола и имеют параметры безопасности
+          found_keys = re.findall(r"((?:vless|trojan)://[^\s<\"'#]+)", v_data)
           
-          # Регулярка для поиска полных ссылок (включая все параметры)
-          keys = re.findall(r"((?:vless|trojan)://[^\s<\"'#]+)", all_data)
-          
-          # Очистка и фильтрация
-          final_pool = []
-          for k in keys:
-              clean = re.split(r'[<>"\'\s]', k)[0]
-              if len(clean) > 90 and clean not in final_pool:
-                  final_pool.append(clean)
+          # Очистка и жесткий фильтр длины (короткие = битые)
+          clean_v = []
+          for k in found_keys:
+              res = re.split(r'[<>"\'\s]', k)[0]
+              if len(res) > 120: # Рабочий VLESS/Trojan всегда длинный из-за параметров
+                  clean_v.append(res)
 
-          random.shuffle(final_pool)
-          v_final = final_pool[:2] # Оставляем 2 лучших
+          v_final = list(dict.fromkeys(clean_v))
+          random.shuffle(v_final)
+          v_final = v_final[:2] # Оставляем 2 самых свежих
 
-          # 2. MTPROTO - Исправленный захват полной ссылки
-          m_all = get_web("https://t.me/s/ProxyMTProto")
-          mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_all)))
-          random.shuffle(mt_links)
-          mt_final = mt_links[:5]
-
-          msg = "✨ **DYNAMIC PROXY REFRESH** ✨\n\n"
-          
-          msg += "🌐 **HTTP/S:**\n"
+          # 3. HTTP/S
           h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http")
           h_list = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))[:5]
+
+          # Формируем сообщение
+          msg = "✨ **FINAL STABLE UPDATE** ✨\n\n"
+          
+          msg += "🌐 **HTTP/S:**\n"
           msg += "\n".join([f"`{p}`" for p in h_list]) if h_list else "❌ Offline"
 
-          msg += "\n\n🔐 **VLESS / TROJAN (Active):**\n"
+          msg += "\n\n🔐 **VLESS / TROJAN (v2rayNG):**\n"
           if v_final:
               for i, node in enumerate(v_final):
-                  msg += f"🔥 Node {i+1}:\n`{node}`\n\n"
+                  msg += f"🚀 Node {i+1}:\n`{node}`\n\n"
           else:
-              msg += "⚠️ Ключи в ротации. Попробуйте снова через 10 минут.\n\n"
+              msg += "⚠️ Свободных узлов не найдено. Обновление через 2 часа.\n\n"
 
-          msg += "🛡 **MTPROTO (Telegram Links):**\n"
-          if mt_final:
-              for i, link in enumerate(mt_final):
-                  msg += f"🔹 [Active Proxy {i+1}]({link})\n"
+          msg += "🛡 **MTPROTO (Direct Links):**\n"
+          for i, link in enumerate(mt_final):
+              msg += f"🔹 [Connect Proxy {i+1}]({link})\n"
 
+          # Отправка
           params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
           urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=params)
         shell: python
