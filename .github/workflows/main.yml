@@ -28,39 +28,37 @@ jobs:
           def get_web(url):
               try:
                   req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/115.0.0.0'})
-                  with urllib.request.urlopen(req, timeout=15) as r:
+                  with urllib.request.urlopen(req, timeout=20) as r:
                       return r.read().decode('utf-8', errors='ignore')
               except: return ""
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. HTTP
+          # 1. HTTP - Работает стабильно
           h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=5000")
           h_list = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))
           random.shuffle(h_list)
           h_final = h_list[:5]
 
-          # 2. VLESS / VMESS / SS - Берем из чистых текстовых источников
+          # 2. VLESS / VMESS - Переходим на прямые Raw-источники (где ключи уже вытянуты)
+          # Это обходит проблему "спрятанных под флагами" ключей
           v_sources = [
-              "https://freevpnkeys.com/vless/",
-              "https://t.me/s/v2rayng_v",
-              "https://t.me/s/vless_v2rayng"
+              "https://raw.githubusercontent.com/freevpnkeys/vless/main/vless.txt", # Прямой импорт с твоего ресурса
+              "https://raw.githubusercontent.com/mansoroud/v2ray-aggregator/main/sub/all_optimized.txt",
+              "https://raw.githubusercontent.com/LonUp/V2Ray-Config/main/Splitted-Configs/vless.txt"
           ]
           v_all = "".join([get_web(s) for s in v_sources])
           
-          # Улучшенный поиск: ищем только то, что начинается на протокол и идет до пробела или кавычки
-          raw_links = re.findall(r"(vless://[^\s<\"'#]+|vmess://[^\s<\"'#]+|ss://[^\s<\"'#]+)", v_all)
+          # Жесткая очистка от HTML и мусора
+          v_list = re.findall(r"(vless://[^\s<\"'#]+|vmess://[^\s<\"'#]+|ss://[^\s<\"'#]+)", v_all)
           
-          v_clean = []
-          for link in raw_links:
-              # Убираем мусор, который мог приклеиться в конце (точки, скобки из HTML)
-              clean_link = re.split(r'[<>"\'\s]', link)[0]
-              if len(clean_link) > 50: # Короткие — это явно мусор
-                  v_clean.append(clean_link)
-          
-          v_clean = list(dict.fromkeys(v_clean))
-          random.shuffle(v_clean)
-          v_final = v_clean[:5]
+          # Оставляем только те, что на порту 443 или 2053 (они обычно живут дольше всего)
+          v_working = [v for v in v_list if ":443" in v or ":2053" in v or ":8443" in v]
+          if not v_working: v_working = v_list # Если элитных нет, берем все
+
+          v_final = list(dict.fromkeys(v_working))
+          random.shuffle(v_final)
+          v_final = v_final[:5]
 
           # 3. MTPROTO
           m_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
@@ -69,23 +67,22 @@ jobs:
           random.shuffle(mt_list)
           mt_final = mt_list[:5]
 
-          msg = "🚀 **ULTRASONIC PROXY PACK** 🚀\n\n"
+          msg = "🔥 **ULTIMATE REFRESH PACK** 🔥\n\n"
           
-          msg += "🌐 **HTTP/S (Fresh):**\n"
+          msg += "🌐 **HTTP/S (Working):**\n"
           msg += "\n".join([f"`{p}`" for p in h_final]) if h_final else "❌ Offline"
 
-          msg += "\n\n🔐 **VLESS / VMESS / SS:**\n"
+          msg += "\n\n🔐 **VLESS / VMESS (Raw API):**\n"
           if v_final:
               for i, node in enumerate(v_final):
-                  # Только чистая ссылка в блоке кода
-                  msg += f"Node {i+1}:\n`{node}`\n\n"
+                  msg += f"🚀 Node {i+1} (Tap to copy):\n`{node}`\n\n"
           else:
-              msg += "⚠️ Конфиги обновляются...\n\n"
+              msg += "⚠️ Поиск активных узлов...\n\n"
 
           msg += "🛡 **MTPROTO (Telegram 5):**\n"
           if mt_final:
               for i, link in enumerate(mt_final):
-                  msg += f"🔹 [Рабочий Прокси {i+1}]({link})\n"
+                  msg += f"🔹 [Подключить Прокси {i+1}]({link})\n"
           else:
               msg += "🔹 [Запасной вариант](tg://proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)\n"
 
