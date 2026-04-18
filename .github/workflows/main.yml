@@ -34,43 +34,51 @@ jobs:
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. HTTP - Оставляем как есть (работает)
+          # 1. HTTP
           h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=5000")
           h_list = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))
           random.shuffle(h_list)
           h_final = h_list[:5]
 
-          # 2. VLESS / VMESS / SS - Берем с твоего нового источника + TG
+          # 2. VLESS / VMESS / SS - Берем из чистых текстовых источников
           v_sources = [
-              "https://freevpnkeys.com/vless/", 
-              "https://freevpnkeys.com/vmess/",
-              "https://t.me/s/v2rayng_v"
+              "https://freevpnkeys.com/vless/",
+              "https://t.me/s/v2rayng_v",
+              "https://t.me/s/vless_v2rayng"
           ]
           v_all = "".join([get_web(s) for s in v_sources])
-          # Ищем ссылки (vless, vmess, ss)
-          v_list = list(dict.fromkeys(re.findall(r"(vless://[^\s<\"'#]+|vmess://[^\s<\"'#]+|ss://[^\s<\"'#]+|trojan://[^\s<\"'#]+)", v_all)))
-          # Оставляем только те, что длиннее 60 символов (реальные ключи)
-          v_list = [v for v in v_list if len(v) > 60]
-          random.shuffle(v_list)
-          v_final = v_list[:5]
+          
+          # Улучшенный поиск: ищем только то, что начинается на протокол и идет до пробела или кавычки
+          raw_links = re.findall(r"(vless://[^\s<\"'#]+|vmess://[^\s<\"'#]+|ss://[^\s<\"'#]+)", v_all)
+          
+          v_clean = []
+          for link in raw_links:
+              # Убираем мусор, который мог приклеиться в конце (точки, скобки из HTML)
+              clean_link = re.split(r'[<>"\'\s]', link)[0]
+              if len(clean_link) > 50: # Короткие — это явно мусор
+                  v_clean.append(clean_link)
+          
+          v_clean = list(dict.fromkeys(v_clean))
+          random.shuffle(v_clean)
+          v_final = v_clean[:5]
 
-          # 3. MTPROTO - Оставляем как есть (работает)
+          # 3. MTPROTO
           m_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
           m_all = "".join([get_web(s) for s in m_sources])
           mt_list = list(dict.fromkeys(re.findall(r"tg://proxy\?server=[^\s&\"']+(?:\&[^\s&\"']+)*", m_all)))
           random.shuffle(mt_list)
           mt_final = mt_list[:5]
 
-          msg = "💎 **ELITE PROXY & VPN PACK** 💎\n\n"
+          msg = "🚀 **ULTRASONIC PROXY PACK** 🚀\n\n"
           
           msg += "🌐 **HTTP/S (Fresh):**\n"
           msg += "\n".join([f"`{p}`" for p in h_final]) if h_final else "❌ Offline"
 
-          msg += "\n\n🔐 **VLESS / VMESS (New Source):**\n"
+          msg += "\n\n🔐 **VLESS / VMESS / SS:**\n"
           if v_final:
               for i, node in enumerate(v_final):
-                  # Публикуем целиком в блоке кода
-                  msg += f"🚀 Node {i+1}:\n`{node}`\n\n"
+                  # Только чистая ссылка в блоке кода
+                  msg += f"Node {i+1}:\n`{node}`\n\n"
           else:
               msg += "⚠️ Конфиги обновляются...\n\n"
 
@@ -81,7 +89,6 @@ jobs:
           else:
               msg += "🔹 [Запасной вариант](tg://proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)\n"
 
-          # Отправка
           params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
           urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=params)
         shell: python
