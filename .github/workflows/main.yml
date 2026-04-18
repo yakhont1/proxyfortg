@@ -24,75 +24,67 @@ jobs:
           import re
           import os
           import random
-          import base64
 
           def get_web(url):
               try:
                   req = urllib.request.Request(url, headers={
                       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
                   })
-                  with urllib.request.urlopen(req, timeout=15) as r:
+                  with urllib.request.urlopen(req, timeout=20) as r:
                       return r.read().decode('utf-8', errors='ignore')
               except: return ""
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. HTTP/S - Без изменений
+          # 1. HTTP/S
           h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http")
-          h_list = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))
-          h_final = h_list[:5]
+          h_final = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))[:5]
 
-          # 2. VLESS & TROJAN - С декодированием Base64
+          # 2. VLESS & TROJAN
+          # Собираем из агрегаторов, которые работают без JS
           v_sources = [
               "https://sub.shz.al/v2ray",
               "https://t.me/s/v2rayng_v",
-              "https://vless.at.ua/index/0-2"
+              "https://t.me/s/v2ray_custom",
+              "https://t.me/s/V2ray_Alpha"
           ]
           
-          v_raw_content = ""
-          for s in v_sources:
-              v_raw_content += get_web(s)
+          v_combined = "".join([get_web(s) for s in v_sources])
+          p_links = re.findall(r"((?:vless|trojan)://[^\s<\"'#]+)", v_combined)
           
-          # Пробуем найти ключи в чистом тексте И в Base64 (если страница закодирована)
-          try:
-              decoded = base64.b64decode(v_raw_content).decode('utf-8')
-              v_raw_content += decoded
-          except: pass
-
-          found = re.findall(r"((?:vless|trojan)://[^\s<\"'#]+)", v_raw_content)
-          v_clean = []
-          for link in found:
+          p_clean = []
+          for link in p_links:
               clean = re.split(r'[<>"\'\s]', link)[0]
               if len(clean) > 80:
-                  v_clean.append(clean)
+                  p_clean.append(clean)
 
-          v_final = list(dict.fromkeys(v_clean))
-          random.shuffle(v_final)
-          v_final = v_final[:2] # Оставляем 2 ключа
+          p_final = list(dict.fromkeys(p_clean))
+          random.shuffle(p_final)
+          p_final = p_final[:2] 
 
-          # 3. MTPROTO - ИСПРАВЛЕННЫЙ ПАРСИНГ (с параметрами)
-          # Берем полный хвост ссылки после server=
-          m_all = get_web("https://t.me/s/ProxyMTProto") + get_web("https://t.me/s/TelMTProto")
+          # 3. MTPROTO - Исправленный захват полной ссылки
+          m_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
+          m_all = "".join([get_web(u) for u in m_sources])
+          # Ищем полную ссылку со всеми параметрами после ?
           mt_list = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_all)))
           random.shuffle(mt_list)
           mt_final = mt_list[:5]
 
-          msg = "⚡️ **ULTIMATE V2RAY REFRESH** ⚡️\n\n"
+          msg = "🚀 **V2RAYNG FINAL ATTEMPT** 🚀\n\n"
           
-          msg += "🌐 **HTTP/S (Working):**\n"
+          msg += "🌐 **HTTP/S (Browsing):**\n"
           msg += "\n".join([f"`{p}`" for p in h_final]) if h_final else "❌ Offline"
 
-          msg += "\n\n🔐 **VLESS / TROJAN (v2rayNG):**\n"
-          if v_final:
-              for i, node in enumerate(v_final):
-                  msg += f"🚀 Node {i+1}:\n`{node}`\n\n"
+          msg += "\n\n🔐 **VLESS / TROJAN (Top 2):**\n"
+          if p_final:
+              for i, node in enumerate(p_final):
+                  msg += f"🔥 Node {i+1}:\n`{node}`\n\n"
           else:
-              msg += "⚠️ Нет свежих узлов. Обновление...\n\n"
+              msg += "⚠️ Нет доступных узлов. Попробуйте обновить позже.\n\n"
 
           msg += "🛡 **MTPROTO (Telegram Links):**\n"
           if mt_final:
               for i, link in enumerate(mt_final):
-                  # Теперь ссылка будет полной и рабочей
                   msg += f"🔹 [Connect Proxy {i+1}]({link})\n"
           else:
               msg += "🔹 [Emergency Link](tg://proxy?server=proxy.digitalresistance.dog&port=443&secret=ddd41d8cd98f00b204e9800998ecf8427e)"
