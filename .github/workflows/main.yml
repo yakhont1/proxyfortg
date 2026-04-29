@@ -48,8 +48,10 @@ jobs:
 
           # Building the Professional Post
           msg = "🌐 **GLOBAL PROXY NETWORK UPDATE** 🌐\n\n"
+          msg = "🌐 **СПИСОК ПРОКСИ ДЛЯ TG и ДЛЯ Browsing** 🌐\n\n"
           
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
+          msg += "🚩 **MTPROTO Нажми на Secure Access и прокси вставится сам** 🚩\n
           msg += "*High-speed encryption for stable connection*\n"
           if mt_final:
               for i, link in enumerate(mt_final):
@@ -59,6 +61,7 @@ jobs:
 
           msg += "\n📡 **HTTP / HTTPS (Browsing)**\n"
           msg += "*Tap any proxy to copy it individually*\n"
+          msg += "*Нажми для копирования прокси*\n
           if h_final:
               # Wrapping each proxy in backticks for individual copying
               for p in h_final:
