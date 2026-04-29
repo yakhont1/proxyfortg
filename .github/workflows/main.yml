@@ -24,6 +24,7 @@ jobs:
           import re
           import os
           import random
+          import base64
 
           def get_web(url):
               try:
@@ -40,37 +41,42 @@ jobs:
           random.shuffle(mt_links)
           mt_final = mt_links[:5]
 
-          # 2. Fetching HTTP/S Proxies
-          h_raw = get_web("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http")
-          h_list = list(dict.fromkeys(re.findall(r"\d+\.\d+\.\d+\.\d+:\d+", h_raw)))
-          random.shuffle(h_list)
-          h_final = h_list[:8]
+          # 2. V2Ray (VLESS/VMESS) from Eternity Aggregator
+          v_raw = get_web("https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity")
+          v_final = []
+          try:
+              decoded_data = base64.b64decode(v_raw).decode('utf-8', errors='ignore')
+              # Ищем vless, vmess, trojan
+              v_links = re.findall(r"((?:vless|vmess|trojan)://[^\s<\"'#]+)", decoded_data)
+              # Фильтруем слишком короткие или битые ссылки
+              v_links = [l for l in v_links if len(l) > 50]
+              random.shuffle(v_links)
+              v_final = v_links[:2]
+          except:
+              pass
 
-          # Building the Professional Post
-          msg = "🌐 **GLOBAL PROXY NETWORK UPDATE** 🌐\n\n"
-          msg = "🌐 **СПИСОК ПРОКСИ ДЛЯ TG и ДЛЯ Browsing** 🌐\n\n"
+          # Building the Bilingual Post
+          msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
+          # Section: V2Ray
+          msg += "⚡️ **V2RAY NODES (VLESS / VMESS)**\n"
+          msg += "*Tap to copy individual node*\n"
+          msg += "*Нажмите, чтобы скопировать ключ*\n"
+          if v_final:
+              for i, link in enumerate(v_final):
+                  msg += f"🚀 Node {i+1}:\n`{link}`\n\n"
+          else:
+              msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
+
+          # Section: MTProto
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
-          msg += "🚩 **MTPROTO Нажми на Secure Access и прокси вставится сам** 🚩\n
-          msg += "*High-speed encryption for stable connection*\n"
+          msg += "*Stable access / Стабильный доступ*\n"
           if mt_final:
               for i, link in enumerate(mt_final):
-                  msg += f"🔹 [Secure Access {i+1}]({link})\n"
-          else:
-              msg += "⚠️ *Scanning for active nodes...*\n"
-
-          msg += "\n📡 **HTTP / HTTPS (Browsing)**\n"
-          msg += "*Tap any proxy to copy it individually*\n"
-          msg += "*Нажми для копирования прокси*\n
-          if h_final:
-              # Wrapping each proxy in backticks for individual copying
-              for p in h_final:
-                  msg += f"`{p}`\n"
-          else:
-              msg += "❌ *Service temporarily offline*"
-
-          msg += "\n✨ **Status:** `Operational`\n"
-          msg += "🕒 **Next Refresh:** In 2 hours"
+                  msg += f"🔹 [Secure Access {i+1} | Подключить]({link})\n"
+          
+          msg += "\n✨ **Status:** `Operational / Работает`\n"
+          msg += "🕒 **Update:** `Every 2 hours / Каждые 2 часа`"
 
           params = urllib.parse.urlencode({
               "chat_id": c, 
