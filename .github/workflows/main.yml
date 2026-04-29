@@ -34,27 +34,35 @@ jobs:
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. MTProto Links (Stable)
+          # 1. MTProto Links (Стабильные источники)
           m_data = get_web("https://t.me/s/ProxyMTProto") + get_web("https://t.me/s/TelMTProto")
           mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
           random.shuffle(mt_links)
           mt_final = mt_links[:5]
 
-          # 2. V2Ray from your new GitHub RAW link
-          raw_content = get_web("https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/refs/heads/main/all_extracted_configs.txt")
+          # 2. V2Ray: Поиск САМОГО НОВОГО файла sub*.txt
+          v_final = []
+          # Заходим на страницу репозитория, чтобы увидеть список файлов
+          repo_page = get_web("https://github.com/Epodonios/v2ray-configs/tree/main/configs")
           
-          # Ищем все протоколы: vless, vmess, trojan, ss
-          v_links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", raw_content)
+          # Ищем все упоминания subXXX.txt
+          file_numbers = re.findall(r"sub(\d+)\.txt", repo_page)
           
-          # Очистка и выборка
-          v_links = list(dict.fromkeys([l for l in v_links if len(l) > 60]))
-          
-          # Берем 2 случайных из последних 20 (чтобы были свежие, но не у всех одинаковые)
-          recent_pool = v_links[-20:] if len(v_links) > 20 else v_links
-          random.shuffle(recent_pool)
-          v_final = recent_pool[:2]
+          if file_numbers:
+              # Превращаем в числа и берем максимальное (последний файл)
+              last_num = max(map(int, file_numbers))
+              last_file_url = f"https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub{last_num}.txt"
+              
+              # Качаем содержимое этого файла
+              raw_content = get_web(last_file_url)
+              v_links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", raw_content)
+              
+              if v_links:
+                  # Берем 2 случайных из этого файла
+                  random.shuffle(v_links)
+                  v_final = v_links[:2]
 
-          # Building the Bilingual Post
+          # Формирование двуязычного поста
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
           msg += "⚡️ **V2RAY NODES (VLESS / VMESS)**\n"
