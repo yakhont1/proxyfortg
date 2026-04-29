@@ -27,45 +27,45 @@ jobs:
 
           def get_web(url):
               try:
-                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       return r.read().decode('utf-8', errors='ignore')
               except: return ""
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. MTProto Links (Stable Sources)
+          # 1. MTProto Links (Stable)
           m_data = get_web("https://t.me/s/ProxyMTProto") + get_web("https://t.me/s/TelMTProto")
           mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
           random.shuffle(mt_links)
           mt_final = mt_links[:5]
 
-          # 2. V2Ray from the Arab Channel (v2ray_configs_pool)
-          # Забираем данные с публичного превью канала
-          v_data = get_web("https://t.me/s/v2ray_configs_pool")
-          # Ищем vless, vmess, trojan
-          v_links = re.findall(r"((?:vless|vmess|trojan)://[^\s<\"'#]+)", v_data)
+          # 2. V2Ray from your new GitHub RAW link
+          raw_content = get_web("https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/refs/heads/main/all_extracted_configs.txt")
           
-          # Очистка: берем только уникальные и длинные (рабочие) конфиги
+          # Ищем все протоколы: vless, vmess, trojan, ss
+          v_links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", raw_content)
+          
+          # Очистка и выборка
           v_links = list(dict.fromkeys([l for l in v_links if len(l) > 60]))
           
-          # Берем последние 2 (они самые свежие в ленте)
-          v_final = v_links[-2:] if len(v_links) >= 2 else v_links
+          # Берем 2 случайных из последних 20 (чтобы были свежие, но не у всех одинаковые)
+          recent_pool = v_links[-20:] if len(v_links) > 20 else v_links
+          random.shuffle(recent_pool)
+          v_final = recent_pool[:2]
 
           # Building the Bilingual Post
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
-          # Section: V2Ray (Config Pool Source)
           msg += "⚡️ **V2RAY NODES (VLESS / VMESS)**\n"
-          msg += "*Fresh configs from premium pool*\n"
-          msg += "*Свежие конфиги из премиум пула*\n"
+          msg += "*Tap to copy individual node*\n"
+          msg += "*Нажмите, чтобы скопировать ключ*\n"
           if v_final:
               for i, link in enumerate(v_final):
                   msg += f"🚀 Node {i+1}:\n`{link}`\n\n"
           else:
-              msg += "⚠️ *Scanning configs... / Поиск конфигов...*\n\n"
+              msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
 
-          # Section: MTProto
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
           msg += "*Stable access / Стабильный доступ*\n"
           if mt_final:
