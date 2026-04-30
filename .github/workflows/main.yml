@@ -26,46 +26,50 @@ jobs:
           import random
           import time
 
-          def get_web(url):
+          def get_web(url, headers=None):
+              if headers is None:
+                  headers = {'User-Agent': 'Mozilla/5.0'}
               try:
-                  # Обход кэша через метку времени
+                  # Сброс кэша
                   cache_buster = f"&t={int(time.time())}" if "?" in url else f"?t={int(time.time())}"
-                  req = urllib.request.Request(url + cache_buster, headers={'User-Agent': 'Mozilla/5.0'})
+                  req = urllib.request.Request(url + cache_buster, headers=headers)
                   with urllib.request.urlopen(req, timeout=15) as r:
                       return r.read().decode('utf-8', errors='ignore')
               except: return ""
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. MTProto Links
+          # 1. MTProto (Берем из проверенных ТГ каналов)
           m_data = get_web("https://t.me/s/ProxyMTProto") + get_web("https://t.me/s/TelMTProto")
           mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
           random.shuffle(mt_links)
           mt_final = mt_links[:5]
 
-          # 2. V2Ray: Берем ПЕРВЫЕ 2 ссылки из файла
+          # 2. V2Ray: Ищем самый свежий файл subXXX.txt
           v_final = []
-          raw_url = "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt"
-          content = get_web(raw_url)
+          # Парсим страницу со списком файлов напрямую
+          files_list_page = get_web("https://github.com/Epodonios/v2ray-configs/tree/main/configs")
+          # Ищем все номера файлов sub123.txt
+          nums = re.findall(r"sub(\d+)\.txt", files_list_page)
           
-          if content:
-              # Ищем все конфиги
-              all_v_links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", content)
-              
-              if all_v_links:
-                  # Сохраняем порядок, но убираем дубликаты
-                  seen = set()
-                  unique_links = [x for x in all_v_links if not (x in seen or seen.add(x))]
-                  
-                  # Берем 2 САМЫЕ ПЕРВЫЕ ссылки
-                  v_final = unique_links[:2]
+          if nums:
+              # Берем файл с максимальным номером
+              max_num = max(map(int, nums))
+              # Пробуем 3 последних файла на случай, если самый последний пустой
+              for n in range(max_num, max_num - 3, -1):
+                  raw_url = f"https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub{n}.txt"
+                  content = get_web(raw_url)
+                  v_links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", content)
+                  if v_links:
+                      # Берем 2 первых из САМОГО нового файла
+                      v_final = v_links[:2]
+                      break
 
           # Формирование поста
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
-          
           msg += "⚡️ **V2RAY NODES (VLESS / VMESS)**\n"
-          msg += "*Latest nodes from top of the list*\n"
-          msg += "*Последние узлы из начала списка*\n"
+          msg += "*Verified fresh nodes from latest sub-files*\n"
+          msg += "*Проверенные узлы из последних файлов подписок*\n"
           
           if v_final:
               for i, link in enumerate(v_final):
