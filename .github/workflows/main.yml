@@ -22,13 +22,14 @@ jobs:
           BOTTOM_2=$(echo "$CONTENT" | grep -E '^[0-9]' | tail -n 2)
           SOCKS_LIST="${TOP_2}"$'\n'"${BOTTOM_2}"
 
-          # 2. Сбор MTPROTO (5 штук, как на скриншоте)
+          # 2. Сбор MTPROTO (5 штук)
           MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | shuf -n 5)
 
-          # 3. Формирование сообщения строго по шаблону
-          MSG="🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐%0A%0A"
+          # 3. Формирование сообщения (Строго по скрину)
+          MSG="ProXy Lists | VPN | Socks | MTProto%0A"
+          MSG="${MSG}🌐 PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ 🌐%0A%0A"
           
-          MSG="${MSG}⚡️ **SOCKS5 NODES (Universal)**%0A"
+          MSG="${MSG}⚡️ SOCKS5 NODES (Universal)%0A"
           MSG="${MSG}Tap to copy individual node%0A"
           MSG="${MSG}Нажмите, чтобы скопировать ключ%0A"
 
@@ -44,7 +45,7 @@ jobs:
             MSG="${MSG}⚠️ Nodes rotation... / Узлы обновляются..%0A%0A"
           fi
 
-          MSG="${MSG}🔒 **MTPROTO (Telegram Direct)**%0A"
+          MSG="${MSG}🔒 MTPROTO (Telegram Direct)%0A"
           MSG="${MSG}**Stable access / Стабильный доступ**%0A"
           
           if [ ! -z "$MT_LINKS" ]; then
