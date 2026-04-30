@@ -24,52 +24,58 @@ jobs:
           import re
           import os
           import random
+          import json
           import time
 
-          def get_web(url, headers=None):
-              if headers is None:
-                  headers = {'User-Agent': 'Mozilla/5.0'}
+          def get_web(url, is_json=False):
               try:
-                  # Сброс кэша
-                  cache_buster = f"&t={int(time.time())}" if "?" in url else f"?t={int(time.time())}"
-                  req = urllib.request.Request(url + cache_buster, headers=headers)
+                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                   with urllib.request.urlopen(req, timeout=15) as r:
-                      return r.read().decode('utf-8', errors='ignore')
-              except: return ""
+                      data = r.read().decode('utf-8', errors='ignore')
+                      return json.loads(data) if is_json else data
+              except: return None
 
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
 
-          # 1. MTProto (Берем из проверенных ТГ каналов)
-          m_data = get_web("https://t.me/s/ProxyMTProto") + get_web("https://t.me/s/TelMTProto")
-          mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
+          # 1. MTProto
+          m_all = (get_web("https://t.me/s/ProxyMTProto") or "") + (get_web("https://t.me/s/TelMTProto") or "")
+          mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_all)))
           random.shuffle(mt_links)
           mt_final = mt_links[:5]
 
-          # 2. V2Ray: Ищем самый свежий файл subXXX.txt
+          # 2. V2Ray через GitHub API
           v_final = []
-          # Парсим страницу со списком файлов напрямую
-          files_list_page = get_web("https://github.com/Epodonios/v2ray-configs/tree/main/configs")
-          # Ищем все номера файлов sub123.txt
-          nums = re.findall(r"sub(\d+)\.txt", files_list_page)
+          # Запрашиваем список файлов в папке configs через API
+          api_url = "https://api.github.com/repos/Epodonios/v2ray-configs/contents/configs"
+          files_data = get_web(api_url, is_json=True)
           
-          if nums:
-              # Берем файл с максимальным номером
-              max_num = max(map(int, nums))
-              # Пробуем 3 последних файла на случай, если самый последний пустой
-              for n in range(max_num, max_num - 3, -1):
-                  raw_url = f"https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub{n}.txt"
+          if files_data:
+              # Собираем все имена файлов subXXX.txt
+              file_names = [f['name'] for f in files_data if f['name'].startswith('sub') and f['name'].endswith('.txt')]
+              # Извлекаем числа из имен
+              nums = []
+              for name in file_names:
+                  match = re.search(r'sub(\d+)\.txt', name)
+                  if match: nums.append(int(match.group(1)))
+              
+              if nums:
+                  # Берем самый большой номер
+                  last_num = max(nums)
+                  # Пробуем загрузить этот файл (RAW версия)
+                  raw_url = f"https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub{last_num}.txt?t={int(time.time())}"
                   content = get_web(raw_url)
-                  v_links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", content)
-                  if v_links:
-                      # Берем 2 первых из САМОГО нового файла
-                      v_final = v_links[:2]
-                      break
+                  
+                  if content:
+                      links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", content)
+                      if links:
+                          # Берем 2 первых (самых свежих внутри файла)
+                          v_final = links[:2]
 
-          # Формирование поста
+          # Формирование сообщения
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           msg += "⚡️ **V2RAY NODES (VLESS / VMESS)**\n"
-          msg += "*Verified fresh nodes from latest sub-files*\n"
-          msg += "*Проверенные узлы из последних файлов подписок*\n"
+          msg += "*Latest verified nodes via GitHub API*\n"
+          msg += "*Свежие узлы, найденные через API*\n"
           
           if v_final:
               for i, link in enumerate(v_final):
