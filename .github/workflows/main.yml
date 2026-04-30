@@ -9,88 +9,63 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'
-      - name: Run logic
+      - name: Run Proxy Logic
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          import urllib.request
-          import re
-          import os
-          import random
-          import json
-          import time
-
-          def get_web(url, is_json=False):
-              try:
-                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                  with urllib.request.urlopen(req, timeout=15) as r:
-                      data = r.read().decode('utf-8', errors='ignore')
-                      return json.loads(data) if is_json else data
-              except: return None
-
-          t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
-
-          # 1. MTProto
-          m_all = (get_web("https://t.me/s/ProxyMTProto") or "") + (get_web("https://t.me/s/TelMTProto") or "")
-          mt_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_all)))
-          random.shuffle(mt_links)
-          mt_final = mt_links[:5]
-
-          # 2. V2Ray через GitHub API
-          v_final = []
-          # Запрашиваем список файлов в папке configs через API
-          api_url = "https://api.github.com/repos/Epodonios/v2ray-configs/contents/configs"
-          files_data = get_web(api_url, is_json=True)
+          # 1. Получаем список файлов через простой текстовый интерфейс GitHub
+          LIST_URL="https://github.com/Epodonios/v2ray-configs/tree/main/configs"
           
-          if files_data:
-              # Собираем все имена файлов subXXX.txt
-              file_names = [f['name'] for f in files_data if f['name'].startswith('sub') and f['name'].endswith('.txt')]
-              # Извлекаем числа из имен
-              nums = []
-              for name in file_names:
-                  match = re.search(r'sub(\d+)\.txt', name)
-                  if match: nums.append(int(match.group(1)))
-              
-              if nums:
-                  # Берем самый большой номер
-                  last_num = max(nums)
-                  # Пробуем загрузить этот файл (RAW версия)
-                  raw_url = f"https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub{last_num}.txt?t={int(time.time())}"
-                  content = get_web(raw_url)
-                  
-                  if content:
-                      links = re.findall(r"((?:vless|vmess|trojan|ss)://[^\s<\"'#]+)", content)
-                      if links:
-                          # Берем 2 первых (самых свежих внутри файла)
-                          v_final = links[:2]
-
-          # Формирование сообщения
-          msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
-          msg += "⚡️ **V2RAY NODES (VLESS / VMESS)**\n"
-          msg += "*Latest verified nodes via GitHub API*\n"
-          msg += "*Свежие узлы, найденные через API*\n"
+          # Находим все номера файлов и выбираем самый большой
+          LAST_NUM=$(curl -sL $LIST_URL | grep -oP 'sub\K[0-9]+(?=\.txt)' | sort -n | tail -1)
           
-          if v_final:
-              for i, link in enumerate(v_final):
-                  msg += f"🚀 Node {i+1}:\n`{link}`\n\n"
-          else:
-              msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
+          if [ -z "$LAST_NUM" ]; then
+            # Если не нашли через парсинг, ставим проверенный вручную номер (на текущий момент)
+            LAST_NUM=216 
+          fi
 
-          msg += "🔒 **MTPROTO (Telegram Direct)**\n"
-          if mt_final:
-              for i, link in enumerate(mt_final):
-                  msg += f"🔹 [Secure Access {i+1} | Подключить]({link})\n"
-          
-          msg += "\n✨ **Status:** `Operational / Работает`\n"
-          msg += "🕒 **Update:** `Every 2 hours / Каждые 2 часа`"
+          # 2. Скачиваем содержимое самого свежего файла
+          RAW_URL="https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub${LAST_NUM}.txt"
+          CONTENT=$(curl -sL $RAW_URL)
 
-          params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
-          urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=params)
-        shell: python
+          # 3. Вытаскиваем vless и vmess (берем первые 2 уникальных)
+          V_LINKS=$(echo "$CONTENT" | grep -E '^(vless|vmess|trojan)://' | head -n 2)
+
+          # 4. Собираем MTProto (как и раньше)
+          MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | head -n 3)
+
+          # Формируем текст сообщения
+          MSG="🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐%0A%0A"
+          MSG="${MSG}⚡️ **V2RAY NODES (VLESS / VMESS)**%0A"
+          MSG="${MSG}*Latest configs from sub${LAST_NUM}.txt*%0A"
+          MSG="${MSG}*Свежие ключи из файла sub${LAST_NUM}.txt*%0A%0A"
+
+          if [ ! -z "$V_LINKS" ]; then
+            i=1
+            while read -r line; do
+              MSG="${MSG}🚀 Node $i:%0A\`$line\`%0A%0A"
+              i=$((i+1))
+            done <<< "$V_LINKS"
+          else
+            MSG="${MSG}⚠️ Nodes rotation... / Обновление...%0A%0A"
+          fi
+
+          MSG="${MSG}🔒 **MTPROTO (Telegram Direct)**%0A"
+          if [ ! -z "$MT_LINKS" ]; then
+            i=1
+            while read -r line; do
+              MSG="${MSG}🔹 [Secure Access $i]($line)%0A"
+              i=$((i+1))
+            done <<< "$MT_LINKS"
+          fi
+
+          MSG="${MSG}%0A✨ **Status:** \`Operational / Работает\`%0A"
+          MSG="${MSG}🕒 **Update:** \`Every 2 hours / Каждые 2 часа\`"
+
+          # Отправка в Телеграм
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d "chat_id=${CHAT_ID}" \
+            -d "text=${MSG}" \
+            -d "parse_mode=Markdown" \
+            -d "disable_web_page_preview=true"
