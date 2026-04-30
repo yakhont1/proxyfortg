@@ -9,61 +9,65 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Run Proxy Logic
+      - name: Run Multi-File Logic
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          # 1. Получаем список файлов через простой текстовый интерфейс GitHub
+          # 1. Пытаемся найти актуальный номер файла
           LIST_URL="https://github.com/Epodonios/v2ray-configs/tree/main/configs"
+          MAX_NUM=$(curl -sL $LIST_URL | grep -oP 'sub\K[0-9]+(?=\.txt)' | sort -n | tail -1)
           
-          # Находим все номера файлов и выбираем самый большой
-          LAST_NUM=$(curl -sL $LIST_URL | grep -oP 'sub\K[0-9]+(?=\.txt)' | sort -n | tail -1)
+          # Если не нашли, берем 216 как базу
+          if [ -z "$MAX_NUM" ]; then MAX_NUM=216; fi
           
-          if [ -z "$LAST_NUM" ]; then
-            # Если не нашли через парсинг, ставим проверенный вручную номер (на текущий момент)
-            LAST_NUM=216 
-          fi
+          echo "Scanning files up to sub${MAX_NUM}.txt"
 
-          # 2. Скачиваем содержимое самого свежего файла
-          RAW_URL="https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub${LAST_NUM}.txt"
-          CONTENT=$(curl -sL $RAW_URL)
+          # 2. Собираем конфиги из последних 10 файлов в один массив
+          ALL_V_LINKS=""
+          for i in $(seq $MAX_NUM -1 $((MAX_NUM-10))); do
+            URL="https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/configs/sub${i}.txt"
+            CONTENT=$(curl -sL "$URL")
+            # Вытаскиваем vless, vmess, trojan, ss
+            LINKS=$(echo "$CONTENT" | grep -E '^(vless|vmess|trojan|ss)://')
+            ALL_V_LINKS="${ALL_V_LINKS}${LINKS}"$'\n'
+          done
 
-          # 3. Вытаскиваем vless и vmess (берем первые 2 уникальных)
-          V_LINKS=$(echo "$CONTENT" | grep -E '^(vless|vmess|trojan)://' | head -n 2)
+          # 3. Чистим дубликаты, перемешиваем и берем 2 штуки
+          FINAL_V=$(echo "$ALL_V_LINKS" | grep . | sort -u | shuf -n 2)
 
-          # 4. Собираем MTProto (как и раньше)
-          MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | head -n 3)
+          # 4. MTProto (стабильный блок)
+          MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | shuf -n 3)
 
-          # Формируем текст сообщения
+          # Формируем текст (Bilingual)
           MSG="🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐%0A%0A"
           MSG="${MSG}⚡️ **V2RAY NODES (VLESS / VMESS)**%0A"
-          MSG="${MSG}*Latest configs from sub${LAST_NUM}.txt*%0A"
-          MSG="${MSG}*Свежие ключи из файла sub${LAST_NUM}.txt*%0A%0A"
+          MSG="${MSG}*Fresh nodes from premium subscription pool*%0A"
+          MSG="${MSG}*Свежие узлы из пула платных подписок*%0A%0A"
 
-          if [ ! -z "$V_LINKS" ]; then
-            i=1
+          if [ ! -z "$FINAL_V" ]; then
+            count=1
             while read -r line; do
-              MSG="${MSG}🚀 Node $i:%0A\`$line\`%0A%0A"
-              i=$((i+1))
-            done <<< "$V_LINKS"
+              MSG="${MSG}🚀 Node $count:%0A\`$line\`%0A%0A"
+              count=$((count+1))
+            done <<< "$FINAL_V"
           else
             MSG="${MSG}⚠️ Nodes rotation... / Обновление...%0A%0A"
           fi
 
           MSG="${MSG}🔒 **MTPROTO (Telegram Direct)**%0A"
           if [ ! -z "$MT_LINKS" ]; then
-            i=1
+            count=1
             while read -r line; do
-              MSG="${MSG}🔹 [Secure Access $i]($line)%0A"
-              i=$((i+1))
+              MSG="${MSG}🔹 [Secure Access $count]($line)%0A"
+              count=$((count+1))
             done <<< "$MT_LINKS"
           fi
 
           MSG="${MSG}%0A✨ **Status:** \`Operational / Работает\`%0A"
           MSG="${MSG}🕒 **Update:** \`Every 2 hours / Каждые 2 часа\`"
 
-          # Отправка в Телеграм
+          # Отправка
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
             -d "chat_id=${CHAT_ID}" \
             -d "text=${MSG}" \
