@@ -9,58 +9,54 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Run SOCKS5 Logic
+      - name: Run Proxy Logic
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          # 1. Загружаем список SOCKS5
+          # 1. Сбор SOCKS5 (2 сверху, 2 снизу)
           URL="https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/socks5/data.txt"
           CONTENT=$(curl -sL "${URL}?t=$(date +%s)")
-
-          if [ ! -z "$CONTENT" ]; then
-            # Очищаем от пустых строк и берем 2 сверху и 2 снизу
-            TOP_2=$(echo "$CONTENT" | grep -E '^[0-9]' | head -n 2)
-            BOTTOM_2=$(echo "$CONTENT" | grep -E '^[0-9]' | tail -n 2)
-            FINAL_PROXIES="${TOP_2}"$'\n'"${BOTTOM_2}"
-          fi
-
-          # 2. MTProto (Блок для ТГ)
-          MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | shuf -n 3)
-
-          # Формируем КРАСИВОЕ сообщение
-          MSG="🌐 **FAST PROXY UPDATE | ОБНОВЛЕНИЕ** 🌐%0A%0A"
           
-          MSG="${MSG}🧦 **SOCKS5 NODES (Universal)**%0A"
-          MSG="${MSG}*Tap to copy IP:PORT*%0A"
-          MSG="${MSG}*Нажми, чтобы скопировать адрес*%0A"
+          TOP_2=$(echo "$CONTENT" | grep -E '^[0-9]' | head -n 2)
+          BOTTOM_2=$(echo "$CONTENT" | grep -E '^[0-9]' | tail -n 2)
+          SOCKS_LIST="${TOP_2}"$'\n'"${BOTTOM_2}"
+
+          # 2. Сбор MTPROTO (5 штук, как на скриншоте)
+          MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | shuf -n 5)
+
+          # 3. Формирование сообщения строго по шаблону
+          MSG="🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐%0A%0A"
           
-          if [ ! -z "$FINAL_PROXIES" ]; then
+          MSG="${MSG}⚡️ **SOCKS5 NODES (Universal)**%0A"
+          MSG="${MSG}Tap to copy individual node%0A"
+          MSG="${MSG}Нажмите, чтобы скопировать ключ%0A"
+
+          if [ ! -z "$SOCKS_LIST" ]; then
+            i=1
             while read -r line; do
               if [ ! -z "$line" ]; then
-                # Делаем IP:PORT копируемым через обратные кавычки
-                MSG="${MSG}📍 \`$line\`%0A"
+                MSG="${MSG}🚀 Node $i:%0A\`$line\`%0A%0A"
+                i=$((i+1))
               fi
-            done <<< "$FINAL_PROXIES"
+            done <<< "$SOCKS_LIST"
           else
-            MSG="${MSG}⚠️ SOCKS5 rotation... / Обновление...%0A"
+            MSG="${MSG}⚠️ Nodes rotation... / Узлы обновляются..%0A%0A"
           fi
 
-          MSG="${MSG}%0A🔒 **TELEGRAM MTPROTO**%0A"
-          MSG="${MSG}*One tap connect / Подключение в один клик*%0A"
+          MSG="${MSG}🔒 **MTPROTO (Telegram Direct)**%0A"
+          MSG="${MSG}**Stable access / Стабильный доступ**%0A"
+          
           if [ ! -z "$MT_LINKS" ]; then
-            count=1
+            i=1
             while read -r line; do
-              MSG="${MSG}🔹 [Connect Proxy $count]($line)%0A"
-              count=$((count+1))
+              MSG="${MSG}🔹 Secure Access $i | [Подключить]($line)%0A"
+              i=$((i+1))
             done <<< "$MT_LINKS"
           fi
 
-          MSG="${MSG}%0A💡 *How to use SOCKS5:* Copy the IP and port above and paste it into your VPN app or browser settings.%0A"
-          MSG="${MSG}💡 *Как использовать:* Скопируйте IP и порт и вставьте их в настройки вашего прокси-клиента или браузера.%0A%0A"
-          
-          MSG="${MSG}✨ **Status:** \`Operational\`%0A"
-          MSG="${MSG}🕒 **Next update:** \`In 2 hours\`"
+          MSG="${MSG}%0A✨ Status: Operational / Работает%0A"
+          MSG="${MSG}🕒 Update: Every 2 hours / Каждые 2 часа"
 
           # Отправка
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
