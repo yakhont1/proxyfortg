@@ -14,18 +14,17 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          # 1. Запрашиваем свежий список SOCKS5 через API ProxyScrape (выдает только живые на данный момент)
-          # Ограничиваем таймаут и берем сразу случайные прокси
+          # 1. Запрашиваем живые SOCKS5 и ОЧИЩАЕМ от скрытых символов \r
           URL="https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=10000&country=all&ssl=all&anonymity=all"
-          CONTENT=$(curl -sL --max-time 10 "${URL}")
+          CONTENT=$(curl -sL --max-time 10 "${URL}" | tr -d '\r')
           
-          # Выбираем 4 случайные строчки из выданного живого списка
+          # Берем 4 случайные строки
           SOCKS_RAW=$(echo "$CONTENT" | grep -E '^[0-9]' | shuf -n 4)
 
-          # 2. Сбор MTPROTO (5 штук, тут все ок)
+          # 2. Сбор MTPROTO (5 штук)
           MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | shuf -n 5)
 
-          # 3. Шапка сообщения строго по скриншоту
+          # 3. Шапка сообщения
           MSG="ProXy Lists | VPN | Socks | MTProto%0A"
           MSG="${MSG}🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐%0A%0A"
           
@@ -33,13 +32,15 @@ jobs:
           MSG="${MSG}Tap to copy individual node%0A"
           MSG="${MSG}Нажмите, чтобы скопировать ключ%0A"
 
-          # 4. Переделываем IP:PORT в правильные кликабельные ссылки Telegram
+          # 4. Обрабатываем строки и создаем ссылки для TG
           if [ ! -z "$SOCKS_RAW" ]; then
             i=1
             while read -r line; do
-              if [ ! -z "$line" ] && [[ "$line" == *":"* ]]; then
-                IP=$(echo "$line" | cut -d':' -f1)
-                PORT=$(echo "$line" | cut -d':' -f2)
+              # Чистим строку на всякий случай еще раз
+              clean_line=$(echo "$line" | xargs)
+              if [ ! -z "$clean_line" ] && [[ "$clean_line" == *":"* ]]; then
+                IP=$(echo "$clean_line" | cut -d':' -f1)
+                PORT=$(echo "$clean_line" | cut -d':' -f2)
                 
                 TG_LINK="https://t.me/socks?server=${IP}&port=${PORT}"
                 
