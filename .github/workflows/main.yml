@@ -14,63 +14,69 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          # 1. Запрашиваем живые SOCKS5 и ОЧИЩАЕМ от скрытых символов \r
-          URL="https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=10000&country=all&ssl=all&anonymity=all"
-          CONTENT=$(curl -sL --max-time 10 "${URL}" | tr -d '\r')
+          import urllib.request
+          import urllib.parse
+          import re
+          import os
+          import random
+          import time
+
+          # 1. Получаем свежие SOCKS5 из живого API
+          v_final = []
+          try:
+              url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=10000&country=all&ssl=all&anonymity=all"
+              req = urllib.request.Request(url + f"&t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0'})
+              with urllib.request.urlopen(req, timeout=15) as r:
+                  content = r.read().decode('utf-8').splitlines()
+                  # Очищаем строки и фильтруем только те, где есть двоеточие
+                  proxies = [l.strip() for l in content if l.strip() and ":" in l]
+                  if proxies:
+                      # Перемешиваем и берем 4 случайных прокси
+                      random.shuffle(proxies)
+                      for p in proxies[:4]:
+                          ip, port = p.split(":", 1)
+                          v_final.append(f"https://t.me/socks?server={ip}&port={port}")
+          except Exception as e:
+              print(f"Socks5 error: {e}")
+
+          # 2. Получаем MTProto (5 штук)
+          mt_final = []
+          try:
+              m_data = ""
+              for t_url in ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]:
+                  with urllib.request.urlopen(t_url, timeout=15) as r:
+                      m_data += r.read().decode('utf-8')
+              mt_final = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
+              random.shuffle(mt_final)
+              mt_final = mt_final[:5]
+          except Exception as e:
+              print(f"MTProto error: {e}")
+
+          # 3. Формируем сообщение строго по твоему шаблону
+          msg = "ProXy Lists | VPN | Socks | MTProto\n"
+          msg += "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
-          # Берем 4 случайные строки
-          SOCKS_RAW=$(echo "$CONTENT" | grep -E '^[0-9]' | shuf -n 4)
-
-          # 2. Сбор MTPROTO (5 штук)
-          MT_LINKS=$(curl -sL "https://t.me/s/ProxyMTProto" | grep -oP 'tg://proxy\?server=[^"&<> ]+' | shuf -n 5)
-
-          # 3. Шапка сообщения
-          MSG="ProXy Lists | VPN | Socks | MTProto%0A"
-          MSG="${MSG}🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐%0A%0A"
+          msg += "⚡️ **SOCKS5 NODES (Universal)**\n"
+          msg += "Tap to copy individual node\n"
+          msg += "Нажмите, чтобы скопировать ключ\n"
           
-          MSG="${MSG}⚡️ **SOCKS5 NODES (Universal)**%0A"
-          MSG="${MSG}Tap to copy individual node%0A"
-          MSG="${MSG}Нажмите, чтобы скопировать ключ%0A"
+          if v_final:
+              for i, link in enumerate(v_final):
+                  msg += f"🚀 Node {i+1}:\n`{link}`\n\n"
+          else:
+              msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
 
-          # 4. Обрабатываем строки и создаем ссылки для TG
-          if [ ! -z "$SOCKS_RAW" ]; then
-            i=1
-            while read -r line; do
-              # Чистим строку на всякий случай еще раз
-              clean_line=$(echo "$line" | xargs)
-              if [ ! -z "$clean_line" ] && [[ "$clean_line" == *":"* ]]; then
-                IP=$(echo "$clean_line" | cut -d':' -f1)
-                PORT=$(echo "$clean_line" | cut -d':' -f2)
-                
-                TG_LINK="https://t.me/socks?server=${IP}&port=${PORT}"
-                
-                MSG="${MSG}🚀 Node $i:%0A\`${TG_LINK}\`%0A%0A"
-                i=$((i+1))
-              fi
-            done <<< "$SOCKS_RAW"
-          else
-            MSG="${MSG}⚠️ Nodes rotation... / Узлы обновляются..%0A%0A"
-          fi
-
-          # 5. Блок MTPROTO
-          MSG="${MSG}🔒 **MTPROTO (Telegram Direct)**%0A"
-          MSG="${MSG}**Stable access / Стабильный доступ**%0A"
+          msg += "🔒 **MTPROTO (Telegram Direct)**\n"
+          msg += "**Stable access / Стабильный доступ**\n"
+          if mt_final:
+              for i, link in enumerate(mt_final):
+                  msg += f"🔹 [Secure Access {i+1} | Подключить]({link})\n"
           
-          if [ ! -z "$MT_LINKS" ]; then
-            i=1
-            while read -r line; do
-              MSG="${MSG}🔹 Secure Access $i | [Подключить]($line)%0A"
-              i=$((i+1))
-            done <<< "$MT_LINKS"
-          fi
+          msg += "\n✨ **Status:** `Operational / Работает`\n"
+          msg += "🕒 **Update:** `Every 2 hours / Каждые 2 часа`"
 
-          # 6. Подвал
-          MSG="${MSG}%0A✨ **Status:** \`Operational / Работает\`%0A"
-          MSG="${MSG}🕒 **Update:** \`Every 2 hours / Каждые 2 часа\`"
-
-          # Отправка в Телеграм
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-            -d "chat_id=${CHAT_ID}" \
-            -d "text=${MSG}" \
-            -d "parse_mode=Markdown" \
-            -d "disable_web_page_preview=true"
+          # 4. Отправка сообщения
+          t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
+          params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
+          urllib.request.urlopen(f"https://api.telegram.org/bot{t}/sendMessage", data=params)
+        shell: python
