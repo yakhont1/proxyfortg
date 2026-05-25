@@ -21,7 +21,7 @@ jobs:
           import random
           import time
 
-          # Список ТОП-источников, где прокси обновляются каждые несколько минут
+          # 3 топ-источника со свежими SOCKS5
           sources = [
               "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
               "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
@@ -30,32 +30,25 @@ jobs:
 
           fresh_pool = []
           
-          # Собираем сливки (первые 15 строк) с каждого рабочего репозитория
+          # Собираем только первые 15 строк из каждого списка (самый свежак)
           for url in sources:
               try:
                   req = urllib.request.Request(url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0'})
                   with urllib.request.urlopen(req, timeout=10) as r:
                       content = r.read().decode('utf-8').splitlines()
-                      
-                      # Чистим строки от мусора
                       clean_lines = [l.strip() for l in content if l.strip() and ":" in l]
-                      
-                      # Забираем первые 15 штук (самый свежий апдейт)
                       fresh_pool.extend(clean_lines[:15])
               except Exception as e:
                   print(f"Error fetching from {url}: {e}")
 
-          # Удаляем дубликаты из общего замеса
+          # Удаляем дубликаты
           fresh_pool = list(dict.fromkeys(fresh_pool))
 
-          # Выбираем 4 случайных узла из собранного свежака
+          # Выбираем 4 случайных прокси из свежего пула
           v_final = []
           if fresh_pool:
               count_to_take = min(4, len(fresh_pool))
-              selected_proxies = random.sample(fresh_pool, count_to_take)
-              for p in selected_proxies:
-                  ip, port = p.split(":", 1)
-                  v_final.append(f"https://t.me/socks?server={ip}&port={port}")
+              v_final = random.sample(fresh_pool, count_to_take)
 
           # 2. Получаем MTProto (5 штук)
           mt_final = []
@@ -70,7 +63,7 @@ jobs:
           except Exception as e:
               print(f"MTProto error: {e}")
 
-          # 3. Формируем сообщение (Дизайн строго 1 в 1)
+          # 3. Формируем сообщение (Дизайн строго 1 в 1, без дублей строк)
           msg = "ProXy Lists | VPN | Socks | MTProto\n"
           msg += "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
@@ -79,8 +72,8 @@ jobs:
           msg += "Нажмите, чтобы скопировать ключ\n"
           
           if v_final:
-              for i, link in enumerate(v_final):
-                  msg += f"🚀 Node {i+1}:\n`{link}`\n\n"
+              for i, proxy in enumerate(v_final):
+                  msg += f"🚀 Node {i+1}:\n`{proxy}`\n\n"
           else:
               msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
 
