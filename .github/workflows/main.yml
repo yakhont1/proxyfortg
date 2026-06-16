@@ -39,7 +39,7 @@ jobs:
           if fresh_pool:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
-          # 2. Сбор MTProto — парсим Server/Port/Secret из текста постов и строим ссылку сами
+          # 2. Сбор MTProto — парсим ссылки из кнопок Connect
           mt_final = []
           mt_sources = [
               "https://t.me/s/ProxyMTProto",
@@ -55,11 +55,18 @@ jobs:
                   req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       web_data = r.read().decode('utf-8')
-                      # Парсим Server/Port/Secret из текста постов
-                      blocks = re.findall(r'Server:\s*(.+?)Port:\s*(\d+)Secret:\s*(\S+?)[<\s]', web_data)
-                      for server, port, secret in blocks:
-                          server = server.strip().rstrip('&#;0123456789')
-                          secret = secret.replace("&", "&").strip().rstrip('&#;.')
+                      # Парсим href из кнопок Connect
+                      links = re.findall(r'href="(https://t\.me/proxy\?server=[^"]+|tg://proxy\?server=[^"]+)"', web_data)
+                      for raw_link in links:
+                          normalized = raw_link.replace("&", "&")
+                          srv_match = re.search(r'server=([^&]+)', normalized)
+                          prt_match = re.search(r'port=(\d+)', normalized)
+                          sec_match = re.search(r'secret=([^&]+)', normalized)
+                          if not srv_match or not prt_match or not sec_match:
+                              continue
+                          server = srv_match.group(1).strip()
+                          port = prt_match.group(1).strip()
+                          secret = sec_match.group(1).strip()
                           if server.lower() in ('unknown', 'none', ''):
                               continue
                           if not re.match(r'^[a-zA-Z0-9.\-]+$', server):
