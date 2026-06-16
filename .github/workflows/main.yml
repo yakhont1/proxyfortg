@@ -20,8 +20,9 @@ jobs:
           import os
           import random
           import time
+          import html
 
-          # 1. Получаем свежие SOCKS5 из трех топ-источников
+          # 1. Сбор свежих SOCKS5 (4 штуки)
           sources = [
               "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
               "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
@@ -40,13 +41,12 @@ jobs:
                   print(f"Error fetching SOCKS5: {e}")
 
           fresh_pool = list(dict.fromkeys(fresh_pool))
-
           v_final = []
           if fresh_pool:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
 
-          # 2. Получаем MTProto (Строго из чистого текста постов, без HTML-мусора кнопок)
+          # 2. Умный сбор MTProto (Парсим даже перенесённые строки)
           mt_final = []
           raw_mt_links = []
           mt_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
@@ -55,33 +55,54 @@ jobs:
               try:
                   req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                   with urllib.request.urlopen(req, timeout=15) as r:
-                      web_data = r.read().decode('utf-8')
+                      # Декодируем весь HTML страницы
+                      web_data = html.unescape(r.read().decode('utf-8'))
                       
-                      # Берем ссылки строго из текстовых блоков постов, где нет грязи
-                      # Исключаем попадание кавычек и HTML-тегов на конце
-                      links = re.findall(r'(tg://proxy\?server=[^\s"\'<>\(\)]+)', web_data)
-                      raw_mt_links.extend(links)
+                      # Шаг А: Сначала забираем готовые ссылки из кнопок "Connect", если они там есть
+                      button_links = re.findall(r'tg://proxy\?server=[^\s"\'<>]+', web_data)
+                      for bl in button_links:
+                          raw_mt_links.append(bl.strip())
+                      
+                      # Шаг Б: Разрезаем страницу на отдельные блоки сообщений, чтобы не путать данные разных постов
+                      posts = re.findall(r'<div class="tgme_widget_message_text[^">]*">(.*?)</div>', web_data, re.DOTALL)
+                      
+                      for post in posts:
+                          # Убираем HTML теги внутри текста поста для чистого поиска
+                          clean_post = re.sub(r'<[^>]+>', ' ', post)
+                          
+                          # Ищем переменные (игнорируем регистр)
+                          server_match = re.search(r'(?:Server|Сервер)\s*:\s*([a-zA-Z0-9\.\-_]+)', clean_post, re.IGNORECASE)
+                          port_match = re.search(r'(?:Port|Порт)\s*:\s*([0-9]+)', clean_post, re.IGNORECASE)
+                          # Секрет ищем жадно, захватывая возможные переносы строк и пробелы до конца блока или ключевых слов
+                          secret_match = re.search(r'(?:Secret|Секрет)\s*:\s*([a-zA-Z0-9\+=\-_ \s\n\r]+)', clean_post, re.IGNORECASE)
+                          
+                          if server_match and port_match and secret_match:
+                              srv = server_match.group(1).strip()
+                              prt = port_match.group(1).strip()
+                              
+                              # Очищаем секрет от абсолютно всех пробелов, переносов строк и мусора
+                              sec = secret_match.group(1).split('@')[0] # отсекаем юзернейм канала, если он прилип
+                              sec = re.sub(r'[\s\n\r]', '', sec).strip()
+                              
+                              # Фильтруем только валидные секреты (длина от 10 символов, чтобы не взять мусор)
+                              if len(sec) >= 10:
+                                  # Кодируем секрет для безопасной передачи в URL (важно для знаков "==")
+                                  encoded_sec = urllib.parse.quote(sec)
+                                  constructed_link = f"tg://proxy?server={srv}&port={prt}&secret={encoded_sec}"
+                                  raw_mt_links.append(constructed_link)
               except Exception as e:
-                  print(f"Error fetching MTProto from {web_url}: {e}")
+                  print(f"Error parsing MTProto text: {e}")
 
-          # Чистим ссылки, убираем остатки HTML-кодирования типа &amp;
-          clean_mt = []
+          # Фильтруем дубликаты
           seen_mt = set()
+          clean_mt = []
           for link in raw_mt_links:
-              normalized = link.replace("&amp;", "&").strip()
-              
-              # Жесткая проверка: если на конце остался огрызок тега, срезаем его
-              if normalized.endswith(('"', "'", ";", "3反")):
-                  continue
-                  
-              if normalized not in seen_mt and "port=" in normalized:
-                  seen_mt.add(normalized)
-                  clean_mt.append(normalized)
+              if link not in seen_mt and "secret=" in link:
+                  seen_mt.add(link)
+                  clean_mt.append(link)
 
-          # Разворачиваем, чтобы самые свежие (последние на странице) шли первыми
+          # Свежие посты находятся внизу веб-страницы, переворачиваем список, чтобы они стали первыми
           clean_mt.reverse()
-          
-          # Забираем строго 5 штук
           mt_final = clean_mt[:5]
 
           # 3. Формируем сообщение
