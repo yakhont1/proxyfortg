@@ -1,8 +1,10 @@
 name: Global Proxy Update
+
 on:
   schedule:
     - cron: '0 */2 * * *'
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,13 +20,17 @@ jobs:
           import os
           import random
           import time
-          # 1. Сбор свежих SOCKS5 (Чистый IP:PORT)
+
+          # 3 топ-источника со свежими SOCKS5
           sources = [
               "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
               "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
               "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt"
           ]
+
           fresh_pool = []
+          
+          # Собираем только первые 15 строк из каждого списка (самый свежак)
           for url in sources:
               try:
                   req = urllib.request.Request(url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0'})
@@ -33,75 +39,56 @@ jobs:
                       clean_lines = [l.strip() for l in content if l.strip() and ":" in l]
                       fresh_pool.extend(clean_lines[:15])
               except Exception as e:
-                  print(f"Error fetching SOCKS5: {e}")
+                  print(f"Error fetching from {url}: {e}")
+
+          # Удаляем дубликаты
           fresh_pool = list(dict.fromkeys(fresh_pool))
+
+          # Выбираем 4 случайных прокси из свежего пула
           v_final = []
           if fresh_pool:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
-          # 2. Сбор MTProto — парсим ссылки из кнопок Connect
+
+          # 2. Получаем MTProto (5 штук)
           mt_final = []
-          mt_sources = [
-              "https://t.me/s/ProxyMTProto",
-              "https://t.me/s/TelMTProto",
-              "https://t.me/s/proxy_gram",
-              "https://t.me/s/MTProxyPool"
-          ]
-          seen_mt = set()
-          clean_mt = []
-          for web_url in mt_sources:
-              channel_proxies = []
-              try:
-                  req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-                  with urllib.request.urlopen(req, timeout=15) as r:
-                      web_data = r.read().decode('utf-8')
-                      # Парсим href из кнопок Connect
-                      links = re.findall(r'href="(https://t\.me/proxy\?server=[^"]+|tg://proxy\?server=[^"]+)"', web_data)
-                      for raw_link in links:
-                          normalized = raw_link.replace("&", "&")
-                          srv_match = re.search(r'server=([^&]+)', normalized)
-                          prt_match = re.search(r'port=(\d+)', normalized)
-                          sec_match = re.search(r'secret=([^&]+)', normalized)
-                          if not srv_match or not prt_match or not sec_match:
-                              continue
-                          server = srv_match.group(1).strip()
-                          port = prt_match.group(1).strip()
-                          secret = sec_match.group(1).strip()
-                          if server.lower() in ('unknown', 'none', ''):
-                              continue
-                          if not re.match(r'^[a-zA-Z0-9.\-]+$', server):
-                              continue
-                          if len(secret) < 10:
-                              continue
-                          proxy_key = f"{server}:{port}:{secret}"
-                          if proxy_key not in seen_mt:
-                              seen_mt.add(proxy_key)
-                              link = f"tg://proxy?server={server}&port={port}&secret={secret}"
-                              channel_proxies.append(link)
-                  channel_proxies.reverse()
-                  clean_mt.extend(channel_proxies[:5])
-              except Exception as e:
-                  print(f"Error fetching MTProto from {web_url}: {e}")
-          mt_final = clean_mt[:5]
-          # 3. Формируем сообщение
+          try:
+              m_data = ""
+              for t_url in ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]:
+                  with urllib.request.urlopen(t_url, timeout=15) as r:
+                      m_data += r.read().decode('utf-8')
+              
+              # Собираем сырые ссылки оригинальным методом
+              raw_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
+              
+              # Разворачиваем, чтобы самые свежие (из конца страницы) шли первыми
+              raw_links.reverse()
+              mt_final = raw_links[:5]
+          except Exception as e:
+              print(f"MTProto error: {e}")
+
+          # 3. Формируем сообщение (Убрана дублирующая строка названия)
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
+          
           msg += "⚡️ **SOCKS5 NODES (Universal)**\n"
           msg += "Tap to copy individual node\n"
           msg += "Нажмите, чтобы скопировать ключ\n"
+          
           if v_final:
               for i, proxy in enumerate(v_final):
                   msg += f"🚀 Node {i+1}:\n`{proxy}`\n\n"
           else:
               msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
+
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
           msg += "**Stable access / Стабильный доступ**\n"
           if mt_final:
               for i, link in enumerate(mt_final):
                   msg += f"🔹 [Secure Access {i+1} | Подключить]({link})\n"
-          else:
-              msg += "⚠️ *MTProto rotation... / Прокси обновляются...*\n"
+          
           msg += "\n✨ **Status:** `Operational / Работает`\n"
           msg += "🕒 **Update:** `Every 2 hours / Каждые 2 часа`"
+
           # 4. Отправка в Telegram
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
           params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
