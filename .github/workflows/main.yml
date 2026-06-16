@@ -39,7 +39,7 @@ jobs:
           if fresh_pool:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
-          # 2. Сбор MTProto — берём по 5 самых свежих с каждого канала, потом общая дедупликация
+          # 2. Сбор MTProto — парсим Server/Port/Secret из текста постов и строим ссылку сами
           mt_final = []
           mt_sources = [
               "https://t.me/s/ProxyMTProto",
@@ -47,42 +47,40 @@ jobs:
               "https://t.me/s/proxy_gram",
               "https://t.me/s/MTProxyPool"
           ]
-          
           seen_mt = set()
           clean_mt = []
-          
           for web_url in mt_sources:
-              channel_links = []
+              channel_proxies = []
               try:
                   req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       web_data = r.read().decode('utf-8')
-                      links = re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", web_data)
-                      
-                      for link in links:
-                          normalized = link.replace("&", "&").strip()
-                          while normalized.endswith(('"', "'", ")", ">", ";", ".", ",")):
-                              normalized = normalized[:-1]
-                          if "server=Unknown" in normalized or "server=unknown" in normalized:
+                      # Парсим Server/Port/Secret из текста постов
+                      blocks = re.findall(r'Server:\s*(.+?)Port:\s*(\d+)Secret:\s*(\S+?)[<\s]', web_data)
+                      for server, port, secret in blocks:
+                          server = server.strip().rstrip('&#;0123456789')
+                          secret = secret.replace("&", "&").strip().rstrip('&#;.')
+                          if server.lower() in ('unknown', 'none', ''):
                               continue
-                          if normalized not in seen_mt and "secret=" in normalized:
-                              if len(normalized.split("secret=")[-1]) > 10:
-                                  seen_mt.add(normalized)
-                                  channel_links.append(normalized)
-                  
-                  channel_links.reverse()
-                  clean_mt.extend(channel_links[:5])
+                          if not re.match(r'^[a-zA-Z0-9.\-]+$', server):
+                              continue
+                          if len(secret) < 10:
+                              continue
+                          proxy_key = f"{server}:{port}:{secret}"
+                          if proxy_key not in seen_mt:
+                              seen_mt.add(proxy_key)
+                              link = f"tg://proxy?server={server}&port={port}&secret={secret}"
+                              channel_proxies.append(link)
+                  channel_proxies.reverse()
+                  clean_mt.extend(channel_proxies[:5])
               except Exception as e:
                   print(f"Error fetching MTProto from {web_url}: {e}")
-          
           mt_final = clean_mt[:5]
           # 3. Формируем сообщение
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
-          
           msg += "⚡️ **SOCKS5 NODES (Universal)**\n"
           msg += "Tap to copy individual node\n"
           msg += "Нажмите, чтобы скопировать ключ\n"
-          
           if v_final:
               for i, proxy in enumerate(v_final):
                   msg += f"🚀 Node {i+1}:\n`{proxy}`\n\n"
@@ -90,13 +88,11 @@ jobs:
               msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
           msg += "**Stable access / Стабильный доступ**\n"
-          
           if mt_final:
               for i, link in enumerate(mt_final):
                   msg += f"🔹 [Secure Access {i+1} | Подключить]({link})\n"
           else:
               msg += "⚠️ *MTProto rotation... / Прокси обновляются...*\n"
-          
           msg += "\n✨ **Status:** `Operational / Работает`\n"
           msg += "🕒 **Update:** `Every 2 hours / Каждые 2 часа`"
           # 4. Отправка в Telegram
