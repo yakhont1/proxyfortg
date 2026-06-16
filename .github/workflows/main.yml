@@ -54,14 +54,32 @@ jobs:
           mt_final = []
           try:
               m_data = ""
-              # Добавляем ?t=время к ссылкам, чтобы заставить Телеграм выдать живой контент без кэша
               for t_url in ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]:
                   nocache_url = t_url + f"?t={int(time.time())}"
                   req = urllib.request.Request(nocache_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       m_data += r.read().decode('utf-8')
               
-              mt_final = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
+              # Улучшенная регулярка: находит tg://proxy, https://t.me/proxy и /proxy
+              raw_links = re.findall(r"((?:tg://proxy|https://t\.me/proxy|/proxy)\?server=[^\s\"'<>]+)", m_data)
+              
+              normalized_links = []
+              for link in raw_links:
+                  # Приводим абсолютно все форматы к стандартному виду tg://proxy
+                  norm = link.replace("https://t.me/proxy", "tg://proxy").replace("/proxy", "tg://proxy")
+                  
+                  # Стандартная очистка &amp; и хвостового мусора, чтобы ссылка не была некорректной
+                  norm = norm.replace("&amp;", "&").strip()
+                  while norm.endswith(('"', "'", ")", ">", ";", ".", ",")):
+                      norm = norm[:-1]
+                      
+                  if "secret=" in norm:
+                      normalized_links.append(norm)
+
+              # Удаляем дубликаты с сохранением порядка
+              mt_final = list(dict.fromkeys(normalized_links))
+              
+              # Перемешиваем и берем 5 штук, как в твоем исходнике
               random.shuffle(mt_final)
               mt_final = mt_final[:5]
           except Exception as e:
