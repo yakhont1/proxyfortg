@@ -45,18 +45,18 @@ jobs:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
 
-          # 2. Сбор MTProto (Оригинальный простой метод)
+          # 2. Сбор MTProto (Оригинальный проверенный метод)
           mt_final = []
           raw_mt_links = []
           mt_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
           
           for web_url in mt_sources:
               try:
-                  req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0'})
+                  req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       web_data = r.read().decode('utf-8')
                       
-                      # Находим ссылки, учитывая возможный &amp; в разметке Телеграма
+                      # Берем ссылки «как есть» из кода страницы
                       links = re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", web_data)
                       raw_mt_links.extend(links)
               except Exception as e:
@@ -66,18 +66,20 @@ jobs:
           seen_mt = set()
           clean_mt = []
           for link in raw_mt_links:
-              # Вычищаем HTML-код амперсанда, делая ссылку полностью рабочей
+              # Переводим безопасный HTML-формат в нормальную ссылку
               normalized = link.replace("&amp;", "&").strip()
               
-              # Срезаем случайный мусор на конце, если регулярка захватила лишний символ
-              if normalized.endswith(('"', "'", ")", ">", ";")):
+              # Если регулярка сожрала мусор на конце (кавычку, скобку, точку с запятой) — срезаем её
+              while normalized.endswith(('"', "'", ")", ">", ";", ".", ",")):
                   normalized = normalized[:-1]
                   
               if normalized not in seen_mt and "secret=" in normalized:
-                  seen_mt.add(normalized)
-                  clean_mt.append(normalized)
+                  # Дополнительная проверка на валидность секрета
+                  if len(normalized.split("secret=")[-1]) > 10:
+                      seen_mt.add(normalized)
+                      clean_mt.append(normalized)
 
-          # Свежие посты идут внизу страницы, переворачиваем список
+          # Переворачиваем, чтобы самые свежие посты (внизу страницы) шли первыми
           clean_mt.reverse()
           mt_final = clean_mt[:5]
 
