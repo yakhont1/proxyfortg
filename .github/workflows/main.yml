@@ -46,7 +46,7 @@ jobs:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
 
-          # 2. Сбор MTProto конструктором из текста постов
+          # 2. Сбор MTProto ИЗ КНОПОК CONNECT (Без чтения кривого текста постов)
           mt_final = []
           try:
               m_data = ""
@@ -56,40 +56,57 @@ jobs:
                   with urllib.request.urlopen(req, timeout=15) as r:
                       m_data += r.read().decode('utf-8')
               
-              m_data = html.unescape(m_data)
-              posts = re.findall(r'<div class="tgme_widget_message_text[^">]*">(.*?)</div>', m_data, re.DOTALL)
-              posts.reverse()
+              # Вытаскиваем содержимое атрибутов href, где есть слово proxy?server=
+              # Эта регулярка найдет ссылки и в формате /proxy? и в формате tg://proxy? или https://t.me/proxy?
+              raw_hrefs = re.findall(r'href=["\']([^"\']*(?:proxy\?|proxy\?server=)[^"\']+)["\']', m_data)
+              
+              # Разворачиваем список, чтобы первыми обрабатывать самые свежие кнопки снизу страницы
+              raw_hrefs.reverse()
               
               seen_servers = set()
               
-              for post in posts:
-                  text_content = re.sub(r'<[^>]+>', '\n', post)
+              for link in raw_hrefs:
+                  # Декодируем HTML амперсанды (&amp; -> &) и убираем лишние пробелы
+                  clean_link = html.unescape(link).strip()
                   
-                  server_m = re.search(r'(?:Server|Сервер)\s*:\s*([a-zA-Z0-9\.\-_]+)', text_content, re.IGNORECASE)
-                  port_m = re.search(r'(?:Port|Порт)\s*:\s*([0-9]+)', text_content, re.IGNORECASE)
-                  secret_m = re.search(r'(?:Secret|Секрет)\s*:\s*([a-zA-Z0-9\+=\-_ \s\n\r\t]+)', text_content, re.IGNORECASE)
-                  
-                  if server_m and port_m and secret_m:
-                      srv = server_m.group(1).strip().lower()
-                      prt = port_m.group(1).strip()
+                  # Приводим любой формат ссылки (относительный /proxy или t.me/proxy) к прямому tg://proxy?
+                  if "proxy?" in clean_link:
+                      query_part = clean_link.split("proxy?")[1]
+                      norm = f"tg://proxy?{query_part}"
+                  else:
+                      continue
                       
-                      # ФИКС: Убираем случайную точку на конце сервера, если админ её влепил
-                      if srv.endswith('.'):
-                          srv = srv[:-1]
+                  # Срезаем случайный мусор с хвоста ссылки, если он туда попал
+                  while norm.endswith(('"', "'", ")", ">", ";", ".", ",")):
+                      norm = norm[:-1]
                       
-                      raw_secret = secret_m.group(1).split('@')[0]
-                      sec = re.sub(r'[\s\n\r\t]', '', raw_secret).strip()
-                      
-                      if len(sec) >= 32 and srv not in seen_servers:
-                          # Собираем прямую монолитную ссылку
-                          link = f"tg://proxy?server={srv}&port={prt}&secret={sec}"
-                          seen_servers.add(srv)
-                          mt_final.append(link)
+                  if "server=" in norm and "port=" in norm and "secret=" in norm:
+                      # Вытаскиваем домен/IP сервера для проверки на дубликаты
+                      try:
+                          parsed_query = urllib.parse.parse_qs(norm.split("?")[1])
+                          srv = parsed_query['server'][0].strip().lower()
+                          port = parsed_query['port'][0].strip()
+                          sec = parsed_query['secret'][0].strip()
                           
+                          # Фикс косяка админов: убираем точку на конце домена (rudomain.info. -> rudomain.info)
+                          if srv.endswith('.'):
+                              srv = srv[:-1]
+                              
+                          # Пересобираем ссылку заново, уже идеально чистую
+                          final_link = f"tg://proxy?server={srv}&port={port}&secret={sec}"
+                      except:
+                          continue
+                          
+                      # Если этот сервер мы еще не добавляли — забираем в пак
+                      if srv not in seen_servers:
+                          seen_servers.add(srv)
+                          mt_final.append(final_link)
+                          
+                      # Набрали 5 уникальных свежих ссылок из кнопок — финишируем
                       if len(mt_final) == 5:
                           break
           except Exception as e:
-              print(f"MTProto structural error: {e}")
+              print(f"MTProto href parsing error: {e}")
 
           # 3. Формируем сообщение
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
