@@ -20,7 +20,6 @@ jobs:
           import os
           import random
           import time
-          import html
 
           # 1. Получаем свежие SOCKS5 из трех топ-источников
           sources = [
@@ -47,42 +46,42 @@ jobs:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
 
-          # 2. Получаем MTProto из веб-версии (Текст + Кнопки)
+          # 2. Получаем MTProto (Строго из чистого текста постов, без HTML-мусора кнопок)
           mt_final = []
           raw_mt_links = []
           mt_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
           
           for web_url in mt_sources:
               try:
-                  req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+                  req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       web_data = r.read().decode('utf-8')
                       
-                      # Ищем любые упоминания tg://proxy в коде
-                      links = re.findall(r'(tg://proxy\?server=[^\s"\'<>]+)', web_data)
+                      # Берем ссылки строго из текстовых блоков постов, где нет грязи
+                      # Исключаем попадание кавычек и HTML-тегов на конце
+                      links = re.findall(r'(tg://proxy\?server=[^\s"\'<>\(\)]+)', web_data)
                       raw_mt_links.extend(links)
               except Exception as e:
                   print(f"Error fetching MTProto from {web_url}: {e}")
 
-          # Декодируем HTML-мусор (превращаем &amp; строго в &)
+          # Чистим ссылки, убираем остатки HTML-кодирования типа &amp;
           clean_mt = []
           seen_mt = set()
           for link in raw_mt_links:
-              # html.unescape уберет &amp;, &quot; и прочую грязь, возвращая ссылку в рабочий вид
-              normalized = html.unescape(link).strip()
+              normalized = link.replace("&amp;", "&").strip()
               
-              # На всякий случай отсекаем мусорные символы, если регулярка захватила лишнее в конце
-              if normalized.endswith(('"', "'", ")", ">")):
-                  normalized = normalized[:-1]
+              # Жесткая проверка: если на конце остался огрызок тега, срезаем его
+              if normalized.endswith(('"', "'", ";", "3反")):
+                  continue
                   
-              if normalized not in seen_mt and "server=" in normalized:
+              if normalized not in seen_mt and "port=" in normalized:
                   seen_mt.add(normalized)
                   clean_mt.append(normalized)
 
-          # Переворачиваем, чтобы самые свежие посты (они внизу страницы) шли первыми
+          # Разворачиваем, чтобы самые свежие (последние на странице) шли первыми
           clean_mt.reverse()
           
-          # Берем строго 5 штук
+          # Забираем строго 5 штук
           mt_final = clean_mt[:5]
 
           # 3. Формируем сообщение
