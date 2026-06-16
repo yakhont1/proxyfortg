@@ -57,18 +57,15 @@ jobs:
               for t_url in ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]:
                   with urllib.request.urlopen(t_url, timeout=15) as r:
                       m_data += r.read().decode('utf-8')
-              
-              # Собираем сырые ссылки оригинальным методом
-              raw_links = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
-              
-              # Разворачиваем, чтобы самые свежие (из конца страницы) шли первыми
-              raw_links.reverse()
-              mt_final = raw_links[:5]
+              mt_final = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
+              random.shuffle(mt_final)
+              mt_final = mt_final[:5]
           except Exception as e:
               print(f"MTProto error: {e}")
 
-          # 3. Формируем сообщение (Убрана дублирующая строка названия)
-          msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
+          # 3. Формируем сообщение (Дизайн строго 1 в 1, без дублей строк)
+          msg = "ProXy Lists | VPN | Socks | MTProto\n"
+          msg += "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
           msg += "⚡️ **SOCKS5 NODES (Universal)**\n"
           msg += "Tap to copy individual node\n"
