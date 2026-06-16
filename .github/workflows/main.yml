@@ -1,10 +1,8 @@
 name: Global Proxy Update
-
 on:
   schedule:
     - cron: '0 */2 * * *'
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,14 +18,12 @@ jobs:
           import os
           import random
           import time
-
           # 1. Сбор свежих SOCKS5 (Чистый IP:PORT)
           sources = [
               "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
               "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
               "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-socks5.txt"
           ]
-
           fresh_pool = []
           for url in sources:
               try:
@@ -38,52 +34,49 @@ jobs:
                       fresh_pool.extend(clean_lines[:15])
               except Exception as e:
                   print(f"Error fetching SOCKS5: {e}")
-
           fresh_pool = list(dict.fromkeys(fresh_pool))
           v_final = []
           if fresh_pool:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
-
-          # 2. Сбор MTProto (Оригинальный проверенный метод)
+          # 2. Сбор MTProto — берём по 5 самых свежих с каждого канала, потом общая дедупликация
           mt_final = []
-          raw_mt_links = []
-          mt_sources = ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]
+          mt_sources = [
+              "https://t.me/s/ProxyMTProto",
+              "https://t.me/s/TelMTProto",
+              "https://t.me/s/proxy_gram",
+              "https://t.me/s/MTProxyPool"
+          ]
+          
+          seen_mt = set()
+          clean_mt = []
           
           for web_url in mt_sources:
+              channel_links = []
               try:
                   req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
                   with urllib.request.urlopen(req, timeout=15) as r:
                       web_data = r.read().decode('utf-8')
-                      
-                      # Берем ссылки «как есть» из кода страницы
                       links = re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", web_data)
-                      raw_mt_links.extend(links)
-              except Exception as e:
-                  print(f"Error fetching MTProto: {e}")
-
-          # Очищаем ссылки от дубликатов и исправляем &amp; обратно на &
-          seen_mt = set()
-          clean_mt = []
-          for link in raw_mt_links:
-              # Переводим безопасный HTML-формат в нормальную ссылку
-              normalized = link.replace("&amp;", "&").strip()
-              
-              # Если регулярка сожрала мусор на конце (кавычку, скобку, точку с запятой) — срезаем её
-              while normalized.endswith(('"', "'", ")", ">", ";", ".", ",")):
-                  normalized = normalized[:-1]
+                      
+                      for link in links:
+                          normalized = link.replace("&", "&").strip()
+                          while normalized.endswith(('"', "'", ")", ">", ";", ".", ",")):
+                              normalized = normalized[:-1]
+                          if "server=Unknown" in normalized or "server=unknown" in normalized:
+                              continue
+                          if normalized not in seen_mt and "secret=" in normalized:
+                              if len(normalized.split("secret=")[-1]) > 10:
+                                  seen_mt.add(normalized)
+                                  channel_links.append(normalized)
                   
-              if normalized not in seen_mt and "secret=" in normalized:
-                  # Дополнительная проверка на валидность секрета
-                  if len(normalized.split("secret=")[-1]) > 10:
-                      seen_mt.add(normalized)
-                      clean_mt.append(normalized)
-
-          # Переворачиваем, чтобы самые свежие посты (внизу страницы) шли первыми
-          clean_mt.reverse()
+                  channel_links.reverse()
+                  clean_mt.extend(channel_links[:5])
+              except Exception as e:
+                  print(f"Error fetching MTProto from {web_url}: {e}")
+          
           mt_final = clean_mt[:5]
-
-          # 3. Формируем сообщение (Без дублирования шапки)
+          # 3. Формируем сообщение
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
           msg += "⚡️ **SOCKS5 NODES (Universal)**\n"
@@ -95,7 +88,6 @@ jobs:
                   msg += f"🚀 Node {i+1}:\n`{proxy}`\n\n"
           else:
               msg += "⚠️ *Nodes rotation... / Узлы обновляются...*\n\n"
-
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
           msg += "**Stable access / Стабильный доступ**\n"
           
@@ -107,7 +99,6 @@ jobs:
           
           msg += "\n✨ **Status:** `Operational / Работает`\n"
           msg += "🕒 **Update:** `Every 2 hours / Каждые 2 часа`"
-
           # 4. Отправка в Telegram
           t, c = os.getenv('TELEGRAM_TOKEN'), os.getenv('CHAT_ID')
           params = urllib.parse.urlencode({"chat_id": c, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": "True"}).encode()
