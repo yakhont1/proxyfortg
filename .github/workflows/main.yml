@@ -54,18 +54,21 @@ jobs:
           mt_final = []
           try:
               m_data = ""
+              # Добавляем ?t=время к ссылкам, чтобы заставить Телеграм выдать живой контент без кэша
               for t_url in ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]:
-                  with urllib.request.urlopen(t_url, timeout=15) as r:
+                  nocache_url = t_url + f"?t={int(time.time())}"
+                  req = urllib.request.Request(nocache_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+                  with urllib.request.urlopen(req, timeout=15) as r:
                       m_data += r.read().decode('utf-8')
+              
               mt_final = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
               random.shuffle(mt_final)
               mt_final = mt_final[:5]
           except Exception as e:
               print(f"MTProto error: {e}")
 
-          # 3. Формируем сообщение (Дизайн строго 1 в 1, без дублей строк)
-          msg = "ProXy Lists | VPN | Socks | MTProto\n"
-          msg += "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
+          # 3. Формируем сообщение
+          msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
           msg += "⚡️ **SOCKS5 NODES (Universal)**\n"
           msg += "Tap to copy individual node\n"
