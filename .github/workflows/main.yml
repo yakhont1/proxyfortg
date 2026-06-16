@@ -20,8 +20,9 @@ jobs:
           import os
           import random
           import time
+          import html
 
-          # 1. Сбор SOCKS5
+          # 1. Сбор SOCKS5 (Твоя рабочая база)
           sources = [
               "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
               "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
@@ -45,7 +46,7 @@ jobs:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
 
-          # 2. Получаем MTProto (Строго свежие и строго уникальные)
+          # 2. Сбор MTProto конструктором из текста постов
           mt_final = []
           try:
               m_data = ""
@@ -55,41 +56,40 @@ jobs:
                   with urllib.request.urlopen(req, timeout=15) as r:
                       m_data += r.read().decode('utf-8')
               
-              # Ищем все ссылки на странице
-              raw_links = re.findall(r"((?:tg://proxy|https://t\.me/proxy|/proxy)\?server=[^\s\"'<>]+)", m_data)
+              m_data = html.unescape(m_data)
+              posts = re.findall(r'<div class="tgme_widget_message_text[^">]*">(.*?)</div>', m_data, re.DOTALL)
+              posts.reverse()
               
-              # Так как новые посты в веб-версии ТГ находятся в самом НИЗУ страницы,
-              # мы переворачиваем список, чтобы скрипт обрабатывал сначала самый свежак
-              raw_links.reverse()
-
               seen_servers = set()
               
-              for link in raw_links:
-                  # Приводим к единому стандарту
-                  norm = link.replace("https://t.me/proxy", "tg://proxy").replace("/proxy", "tg://proxy")
-                  norm = norm.replace("&amp;", "&").strip()
+              for post in posts:
+                  text_content = re.sub(r'<[^>]+>', '\n', post)
                   
-                  # Чистим хвосты
-                  while norm.endswith(('"', "'", ")", ">", ";", ".", ",")):
-                      norm = norm[:-1]
+                  server_m = re.search(r'(?:Server|Сервер)\s*:\s*([a-zA-Z0-9\.\-_]+)', text_content, re.IGNORECASE)
+                  port_m = re.search(r'(?:Port|Порт)\s*:\s*([0-9]+)', text_content, re.IGNORECASE)
+                  secret_m = re.search(r'(?:Secret|Секрет)\s*:\s*([a-zA-Z0-9\+=\-_ \s\n\r\t]+)', text_content, re.IGNORECASE)
+                  
+                  if server_m and port_m and secret_m:
+                      srv = server_m.group(1).strip().lower()
+                      prt = port_m.group(1).strip()
                       
-                  if "server=" in norm and "secret=" in norm:
-                      # Вытаскиваем IP сервера, чтобы проверить на уникальность
-                      try:
-                          server_ip = norm.split("server=")[1].split("&")[0]
-                      except:
-                          continue
+                      # ФИКС: Убираем случайную точку на конце сервера, если админ её влепил
+                      if srv.endswith('.'):
+                          srv = srv[:-1]
+                      
+                      raw_secret = secret_m.group(1).split('@')[0]
+                      sec = re.sub(r'[\s\n\r\t]', '', raw_secret).strip()
+                      
+                      if len(sec) >= 32 and srv not in seen_servers:
+                          # Собираем прямую монолитную ссылку
+                          link = f"tg://proxy?server={srv}&port={prt}&secret={sec}"
+                          seen_servers.add(srv)
+                          mt_final.append(link)
                           
-                      # Если мы этот сервер еще не брали — добавляем в список
-                      if server_ip not in seen_servers:
-                          seen_servers.add(server_ip)
-                          mt_final.append(norm)
-                          
-                      # Как только наскребли 5 уникальных свежих прокси — тормозим
                       if len(mt_final) == 5:
                           break
           except Exception as e:
-              print(f"MTProto error: {e}")
+              print(f"MTProto structural error: {e}")
 
           # 3. Формируем сообщение
           msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
