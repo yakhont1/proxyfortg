@@ -21,7 +21,7 @@ jobs:
           import random
           import time
 
-          # 3 топ-источника со свежими SOCKS5
+          # 1. Получаем свежие SOCKS5 из трех топ-источников
           sources = [
               "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
               "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
@@ -29,17 +29,16 @@ jobs:
           ]
 
           fresh_pool = []
-          
-          # Собираем только первые 15 строк из каждого списка (самый свежак)
           for url in sources:
               try:
                   req = urllib.request.Request(url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0'})
                   with urllib.request.urlopen(req, timeout=10) as r:
                       content = r.read().decode('utf-8').splitlines()
                       clean_lines = [l.strip() for l in content if l.strip() and ":" in l]
+                      # Забираем первые 15 строк — самый свежак
                       fresh_pool.extend(clean_lines[:15])
               except Exception as e:
-                  print(f"Error fetching from {url}: {e}")
+                  print(f"Error fetching SOCKS5 from {url}: {e}")
 
           # Удаляем дубликаты
           fresh_pool = list(dict.fromkeys(fresh_pool))
@@ -50,22 +49,52 @@ jobs:
               count_to_take = min(4, len(fresh_pool))
               v_final = random.sample(fresh_pool, count_to_take)
 
-          # 2. Получаем MTProto (5 штук)
+          # 2. Получаем САМЫЕ СВЕЖИЕ MTProto через RSS-ленту каналов (гарантия новизны)
           mt_final = []
-          try:
-              m_data = ""
-              for t_url in ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]:
-                  with urllib.request.urlopen(t_url, timeout=15) as r:
-                      m_data += r.read().decode('utf-8')
-              mt_final = list(dict.fromkeys(re.findall(r"(tg://proxy\?server=[^\s\"'<>]+)", m_data)))
-              random.shuffle(mt_final)
-              mt_final = mt_final[:5]
-          except Exception as e:
-              print(f"MTProto error: {e}")
+          mt_sources = [
+              "https://tgprog.com/channel/rss/ProxyMTProto/",
+              "https://tgprog.com/channel/rss/TelMTProto/"
+          ]
+          
+          raw_mt_links = []
+          for rss_url in mt_sources:
+              try:
+                  req = urllib.request.Request(rss_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0'})
+                  with urllib.request.urlopen(req, timeout=15) as r:
+                      rss_data = r.read().decode('utf-8')
+                      # Ищем ссылки внутри CDATA и текста публикаций
+                      links = re.findall(r"(tg://proxy\?server=[^\s\"'<>&\s]+)", rss_data)
+                      raw_mt_links.extend(links)
+              except Exception as e:
+                  print(f"Error fetching MTProto RSS from {rss_url}: {e}")
 
-          # 3. Формируем сообщение (Дизайн строго 1 в 1, без дублей строк)
-          msg = "ProXy Lists | VPN | Socks | MTProto\n"
-          msg += "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
+          # Если RSS подвел, пробуем стандартный веб-метод как запасной вариант
+          if len(raw_mt_links) < 5:
+              for web_url in ["https://t.me/s/ProxyMTProto", "https://t.me/s/TelMTProto"]:
+                  try:
+                      req = urllib.request.Request(web_url + f"?t={int(time.time())}", headers={'User-Agent': 'Mozilla/5.0'})
+                      with urllib.request.urlopen(req, timeout=10) as r:
+                          web_data = r.read().decode('utf-8')
+                          links = re.findall(r"(tg://proxy\?server=[^\s\"'<>&\s]+)", web_data)
+                          raw_mt_links.extend(links)
+                  except Exception as e:
+                      print(f"Backup web fetch error for {web_url}: {e}")
+
+          # Очищаем от дубликатов с сохранением порядка (свежие в начале)
+          seen = set()
+          clean_mt = []
+          for link in raw_mt_links:
+              # Убираем возможные дубликаты и битые символы на конце
+              normalized = link.strip().replace("&amp;", "&")
+              if normalized not in seen:
+                  seen.add(normalized)
+                  clean_mt.append(normalized)
+
+          # Берем строго первые 5 самых новых прокси
+          mt_final = clean_mt[:5]
+
+          # 3. Формируем сообщение (Убрана дублирующая строка названия)
+          msg = "🌐 **PROXY NETWORK UPDATE | ОБНОВЛЕНИЕ СЕТИ** 🌐\n\n"
           
           msg += "⚡️ **SOCKS5 NODES (Universal)**\n"
           msg += "Tap to copy individual node\n"
@@ -79,9 +108,12 @@ jobs:
 
           msg += "🔒 **MTPROTO (Telegram Direct)**\n"
           msg += "**Stable access / Стабильный доступ**\n"
+          
           if mt_final:
               for i, link in enumerate(mt_final):
                   msg += f"🔹 [Secure Access {i+1} | Подключить]({link})\n"
+          else:
+              msg += "⚠️ *MTProto rotation... / Прокси обновляются...*\n"
           
           msg += "\n✨ **Status:** `Operational / Работает`\n"
           msg += "🕒 **Update:** `Every 2 hours / Каждые 2 часа`"
